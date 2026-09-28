@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Luca" />
+  <meta name="theme-color" content="#F3F1EC" />
+  <title>Luca · Family Money</title>
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script id="kid-data" type="application/json">
+{
+  "name": "Luca",
+  "spend": {
+    "balance": 41,
+    "blurb": "Ready for small choices you make",
+    "why": "Money you can use soon",
+    "tip": "Spend is for things you choose soon — still look first, then ask a grown-up to move money.",
+    "whyBody": [
+      "This jar is for near-term choices.",
+      "A grown-up moves money when you’re ready."
+    ],
+    "month": [
+      { "text": "− $18 · Snacks + a comic", "mute": false },
+      { "text": "+ $15 · Chores share", "mute": false },
+      { "text": "Still ready for small choices", "mute": true }
+    ],
+    "monthStory": {
+      "in": { "amount": 10, "blurb": "From chores share" },
+      "outLabel": "Used from Spend",
+      "out": { "amount": 18, "blurb": "Snacks + a comic" },
+      "note": "Spend is for soon. Ask a grown-up before anything moves.",
+      "tip": "Watching what came in helps you see patterns — not to worry, just to notice."
+    }
+  },
+  "save": {
+    "balance": 312,
+    "goalLabel": "Camping gear",
+    "goalCurrent": 312,
+    "goalTarget": 450,
+    "blurbHome": "Camping gear · getting close",
+    "blurbDetail": "Camping gear · a good bit of the way",
+    "why": "Waiting for something that matters",
+    "tip": "Saving is choosing “later” on purpose — so your gear (or whatever you pick) can wait for you.",
+    "whyBody": [
+      "This jar does not buy things today.",
+      "It holds money for a goal you care about."
+    ],
+    "month": [
+      { "text": "+ $25 · Birthday from Uncle", "mute": false },
+      { "text": "+ $15 · Chores", "mute": false },
+      { "text": "− $0 left this jar", "mute": true }
+    ],
+    "monthStory": {
+      "in": { "amount": 55, "blurb": "Gifts and chores" },
+      "outLabel": "Went to Spend",
+      "out": { "amount": 18, "blurb": "Snacks + a comic" },
+      "note": "Most new money went to Save and Grow. Steady is a good story.",
+      "tip": "Watching what came in helps you see patterns — not to worry, just to notice."
+    }
+  },
+  "grow": {
+    "pathPct": 68,
+    "rings": ["on", "on", "on", "mid"],
+    "label": "On the way · planted for years",
+    "sub": "Just how the path is filling",
+    "why": "Planted for years, not today",
+    "tip": "Grow money is meant to sit a long time so it can get stronger. We show the path, not a big dollar total.",
+    "college": { "pct": 74, "rings": ["on", "on", "on", "mid"], "sub": "Growing for college", "path": "Path filling" },
+    "later": { "pct": 44, "rings": ["on", "on", "mid", ""], "sub": "Getting ready for grown-up you", "path": "On the way" }
+  }
+}
+  </script>
+  <script src="../app.js"></script>
+</body>
+</html>
