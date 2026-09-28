@@ -29,13 +29,26 @@ function esc(value) {
 }
 
 function money(n) {
-  return "$" + Math.round(Number(n)).toLocaleString("en-US");
+  const rounded = Number(n).toFixed(2);
+  const [dollars, cents] = rounded.split(".");
+  const sign = dollars.startsWith("-") ? "-" : "";
+  const whole = dollars.replace("-", "");
+  return sign + "$" + Number(whole).toLocaleString("en-US") + "." + cents;
 }
 
-function goalPct(save) {
+function goalBar(save, extraStyle) {
   const target = Number(save.goalTarget);
-  if (!target) return 0;
-  return Math.max(0, Math.min(100, Math.round((Number(save.goalCurrent) / target) * 100)));
+  if (!target) return "";
+  const pct = Math.max(0, Math.min(100, Math.round((Number(save.goalCurrent) / target) * 100)));
+  const style = extraStyle ? ` style="${extraStyle}"` : "";
+  return `<div class="goal-bar"${style}><div class="goal-fill" style="width:${pct}%"></div></div>`;
+}
+
+function progressTrack(pct, cls) {
+  if (pct == null || pct === "") return "";
+  const width = Math.max(0, Math.min(100, Number(pct)));
+  if (Number.isNaN(width)) return "";
+  return `<div class="progress-track"><div class="progress-fill ${cls}" style="width:${width}%"></div></div>`;
 }
 
 function ringsHtml(kinds, numbered) {
@@ -88,7 +101,7 @@ function renderHome(kid) {
       <div class="jar-name">Save</div>
       <div class="amount">${money(s.balance)}</div>
       <div class="blurb">${esc(s.blurbHome)}</div>
-      <div class="goal-bar"><div class="goal-fill" style="width:${goalPct(s)}%"></div></div>
+      ${goalBar(s)}
       <div class="why">Why this jar? · ${esc(s.why)}</div>
     </button>
 
@@ -96,7 +109,7 @@ function renderHome(kid) {
       <div class="tick grow"></div>
       <div class="jar-name">Grow</div>
       <div class="progress-label">${esc(g.label)}</div>
-      <div class="progress-track"><div class="progress-fill" style="width:${Number(g.pathPct)}%"></div></div>
+      ${progressTrack(g.pathPct, "")}
       <div class="milestone-row">${ringsHtml(g.rings, true)}</div>
       <div class="progress-sub">${esc(g.sub)}</div>
       <div class="why">Why this jar? · ${esc(g.why)}</div>
@@ -104,7 +117,7 @@ function renderHome(kid) {
 
     <div class="footer-note">
       <p>Ask a grown-up to move money</p>
-      <p>This app only shows your jars</p>
+      <p>Balances from September 28</p>
     </div>
   `);
 }
@@ -136,11 +149,7 @@ function renderSpend(kid) {
             <p class="blurb" style="color:#141416;margin-bottom:6px">${esc(kid.spend.whyBody[0])}</p>
             <p class="blurb">${esc(kid.spend.whyBody[1])}</p>
           </div>`
-        : `<div class="section-label">This month</div>
-           <div class="card">
-             ${rowsHtml(kid.spend.month)}
-           </div>
-           <button type="button" class="chip soft" data-go-month="spend" style="width:100%;margin-top:4px">Open full month story</button>`
+        : monthPanel(kid.spend)
     }
   `);
 }
@@ -157,7 +166,7 @@ function renderSave(kid) {
     <div class="jar-name" style="margin-top:6px">Save</div>
     <div class="amount lg">${money(s.balance)}</div>
     <p class="sub" style="margin-bottom:12px">${esc(s.blurbDetail)}</p>
-    <div class="goal-bar" style="margin-bottom:16px"><div class="goal-fill" style="width:${goalPct(s)}%"></div></div>
+    ${goalBar(s, "margin-bottom:16px")}
 
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(s.tip)}</span></p>
@@ -174,11 +183,7 @@ function renderSave(kid) {
             <p class="blurb" style="color:#141416;margin-bottom:6px">${esc(s.whyBody[0])}</p>
             <p class="blurb">${esc(s.whyBody[1])}</p>
           </div>`
-        : `<div class="section-label">This month</div>
-           <div class="card">
-             ${rowsHtml(s.month)}
-           </div>
-           <button type="button" class="chip soft" data-go-month="save" style="width:100%;margin-top:4px">Open full month story</button>`
+        : monthPanel(s)
     }
   `);
 }
@@ -215,26 +220,52 @@ function renderGrow(kid) {
     <div class="card">
       <div class="progress-label">For college</div>
       <div class="progress-sub">${esc(g.college.sub)}</div>
-      <div class="progress-track"><div class="progress-fill college" style="width:${Number(g.college.pct)}%"></div></div>
+      ${progressTrack(g.college.pct, "college")}
       <div class="milestone-row">${ringsHtml(g.college.rings)}</div>
-      <div class="progress-sub">${esc(g.college.path)}</div>
+      <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
     </div>
 
     <div class="card">
       <div class="progress-label">For later</div>
       <div class="progress-sub">${esc(g.later.sub)}</div>
-      <div class="progress-track"><div class="progress-fill later" style="width:${Number(g.later.pct)}%"></div></div>
+      ${progressTrack(g.later.pct, "later")}
       <div class="milestone-row">${ringsHtml(g.later.rings)}</div>
       <div class="progress-sub">${esc(g.later.path)}</div>
     </div>
   `);
 }
 
+function monthPanel(jar) {
+  const rows = Array.isArray(jar.month) ? jar.month : [];
+  const story = jar.monthStory;
+  const list = rows.length
+    ? `<div class="card">${rowsHtml(rows)}</div>`
+    : `<div class="card soft">
+         <p class="blurb" style="color:#141416;margin-bottom:6px">A grown-up keeps what moved this month.</p>
+         <p class="blurb">You can look at your balance. Ask before anything changes.</p>
+       </div>`;
+  const more = story
+    ? `<button type="button" class="chip soft" data-go-month="${esc(jar.monthKey || "")}" style="width:100%;margin-top:4px">Open full month story</button>`
+    : "";
+  return `<div class="section-label">This month</div>${list}${more}`;
+}
+
 function renderMonth(kid) {
   const from = state.monthFrom === "spend" ? "spend" : "save";
-  const story = from === "spend" ? kid.spend.monthStory : kid.save.monthStory;
+  const jar = from === "spend" ? kid.spend : kid.save;
+  const story = jar.monthStory;
   const jarLabel = from === "spend" ? "Spend" : "Save";
   const monthName = new Date().toLocaleString("en-US", { month: "long" });
+  if (!story) {
+    return shell(`
+      <button type="button" class="back" data-back="${from}">← ${jarLabel} jar</button>
+      <h1>This month</h1>
+      <p class="sub">${esc(kid.name)} · ${esc(monthName)}</p>
+      <div class="card soft">
+        <p class="blurb" style="color:#141416">A grown-up keeps what moved this month.</p>
+      </div>
+    `);
+  }
   return shell(`
     <button type="button" class="back" data-back="${from}">← ${jarLabel} jar</button>
     <h1>This month</h1>
