@@ -2,7 +2,7 @@
 
 Look-only jars for Ella and Luca. Each child has a separate page, so one bookmark cannot open the other child’s jars.
 
-Spend and Save show sample dollars. Grow shows progress only — no college or later dollar totals. Tips stay on each jar. Nothing here moves money.
+Spend and Save show Monarch balances as of September 28, 2026. Grow shows progress only — college is about 43% of the way, and later stays a path with no dollar total. Tips stay on each jar. Nothing here moves money.
 
 ## iPad bookmarks
 
