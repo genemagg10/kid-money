@@ -9,4 +9,4 @@ Spend and Save show sample dollars. Grow shows progress only — no college or l
 - Ella: https://genemagg10.github.io/kid-money/ella/
 - Luca: https://genemagg10.github.io/kid-money/luca/
 
-GitHub Pages publishes this site from the `main` branch, using the repository root.
+Site files are on `main` at the repository root (`.nojekyll`, so Pages serves the files as-is). In the repo, set Pages to **Deploy from a branch**, branch `main`, folder `/` (root).
