@@ -185,17 +185,8 @@ function ringsHtml(kinds, numbered) {
     .join("");
 }
 
-function clock() {
-  const d = new Date();
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
-}
-
 function shell(inner) {
-  return `<div class="phone">
-    <div class="status"><span>${esc(clock())}</span><span>iPad</span></div>
-    ${inner}
-    <div class="home-bar"></div>
-  </div>`;
+  return `<div class="phone">${inner}</div>`;
 }
 
 function rowsHtml(rows) {

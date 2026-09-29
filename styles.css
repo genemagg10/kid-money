@@ -15,15 +15,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   max-width: 768px;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 18px 28px 36px;
+  padding: 28px 28px 36px;
   display: flex;
   flex-direction: column;
   position: relative;
-}
-.status {
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 14px; font-weight: 600; color: #6E6E73;
-  margin-bottom: 18px; letter-spacing: 0.01em;
 }
 .chips { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
 .chip {
@@ -206,11 +201,6 @@ h1 {
   background: none; border: none; cursor: pointer; font-family: inherit;
   padding: 8px 0; min-height: 44px; text-align: left;
 }
-.home-bar {
-  position: sticky; left: 50%; bottom: 8px; align-self: center;
-  width: 118px; height: 5px; border-radius: 3px; background: #CDC9C1;
-  margin-top: 16px; flex-shrink: 0;
-}
 .row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 16px 0; border-top: 1px solid #EEEAE3;
@@ -262,14 +252,4 @@ h1 {
 }
 button.card {
   text-align: left; width: 100%; font-family: inherit; color: inherit;
-}
-@media (min-width: 769px) {
-  body { background: #E4E0D8; }
-  .phone {
-    margin-top: 24px; margin-bottom: 24px;
-    min-height: calc(100dvh - 48px);
-    border-radius: 28px;
-    background: #F3F1EC;
-    box-shadow: 0 12px 40px rgba(20,20,22,0.08);
-  }
 }
