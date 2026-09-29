@@ -10,3 +10,15 @@ Spend is the piggy bank (cash at home). Each child counts it and updates the tot
 - Luca: https://genemagg10.github.io/kid-money/luca/
 
 Site files are on `main` at the repository root (`.nojekyll`, so Pages serves the files as-is). In the repo, set Pages to **Deploy from a branch**, branch `main`, folder `/` (root).
+
+## Curriculum
+
+Warren’s Phase 1 lessons (L1–L6) show up in the kid pages, one idea at a time.
+
+- **Home** — “Your money has jobs.” Each jar’s Why line is that job: use soon, wait on purpose, grow for a long time. A Learn card shows the current lesson and gentle progress, such as 2 of 6.
+- **Learn** — L1 Three jars, L2 Your dashboard, L3 This month, L4 Save vs Spend, L5 Grow for later, L6 Privacy. “I got it” unlocks the next lesson. Continue moves on. Ask a grown-up saves an optional note.
+- **Spend** — Counting the piggy and the brown/blue slider are the Save vs Spend activity.
+- **Save** — Tip, Why, and This month, plus “Name one thing you’re waiting for.”
+- **Grow** — College path and retirement path, with no dollar totals on those paths. Roth IRA and 401(k) are named only in the retirement tip. The activity is to say what each path is for.
+
+Progress stays in this browser only, one child per key: `family-money-learn:ella` and `family-money-learn:luca` (`done`, `notes`, `waitingFor`). Piggy counts, the slider split, and money owed stay on their own keys.
