@@ -1,5 +1,6 @@
 /* One child per page. Account balances come only from #kid-data.
-   Piggy counts are saved on this device, one key per child. */
+   Piggy counts and the spend/save split are saved on this device, one key per child.
+   The split does not change the savings-account balance. */
 
 const state = {
   screen: "home",
@@ -43,8 +44,16 @@ function readPiggy(kid) {
     const data = JSON.parse(raw);
     if (!data || typeof data.amount !== "number" || !Number.isFinite(data.amount)) return null;
     if (data.amount < 0 || data.amount > 9999.99) return null;
+    const amount = Math.round(data.amount * 100) / 100;
+    let saveAmount = 0;
+    if (typeof data.saveAmount === "number" && Number.isFinite(data.saveAmount)) {
+      saveAmount = Math.round(data.saveAmount * 100) / 100;
+    }
+    if (saveAmount < 0) saveAmount = 0;
+    if (saveAmount > amount) saveAmount = amount;
     return {
-      amount: Math.round(data.amount * 100) / 100,
+      amount,
+      saveAmount,
       countedAt: typeof data.countedAt === "string" ? data.countedAt : "",
     };
   } catch (err) {
@@ -52,17 +61,70 @@ function readPiggy(kid) {
   }
 }
 
-function writePiggy(kid, amount) {
-  const payload = {
-    amount: Math.round(amount * 100) / 100,
-    countedAt: new Date().toISOString(),
-  };
+function writeStoredPiggy(kid, payload) {
   try {
     localStorage.setItem(piggyKey(kid), JSON.stringify(payload));
     return payload;
   } catch (err) {
     return null;
   }
+}
+
+function writePiggy(kid, amount) {
+  const prev = readPiggy(kid);
+  const total = Math.round(amount * 100) / 100;
+  let saveAmount = prev ? prev.saveAmount : 0;
+  if (saveAmount > total) saveAmount = total;
+  if (saveAmount < 0) saveAmount = 0;
+  return writeStoredPiggy(kid, {
+    amount: total,
+    saveAmount,
+    countedAt: new Date().toISOString(),
+  });
+}
+
+function writeSplit(kid, saveAmount) {
+  const prev = readPiggy(kid);
+  if (!prev) return null;
+  let save = Math.round(Number(saveAmount) * 100) / 100;
+  if (!Number.isFinite(save) || save < 0) save = 0;
+  if (save > prev.amount) save = prev.amount;
+  return writeStoredPiggy(kid, {
+    amount: prev.amount,
+    saveAmount: save,
+    countedAt: prev.countedAt,
+  });
+}
+
+function toCents(n) {
+  return Math.round(Number(n) * 100);
+}
+
+function fromCents(cents) {
+  return cents / 100;
+}
+
+function splitOf(piggy) {
+  if (!piggy) return null;
+  const totalCents = toCents(piggy.amount);
+  let saveCents = toCents(piggy.saveAmount || 0);
+  if (saveCents < 0) saveCents = 0;
+  if (saveCents > totalCents) saveCents = totalCents;
+  return {
+    totalCents,
+    saveCents,
+    spendCents: totalCents - saveCents,
+    total: fromCents(totalCents),
+    save: fromCents(saveCents),
+    spend: fromCents(totalCents - saveCents),
+  };
+}
+
+function splitMood(split) {
+  if (!split || split.totalCents <= 0) return "";
+  if (split.saveCents === 0) return "All of this is ready to use. Slide if you want some to wait.";
+  if (split.spendCents === 0) return "All of this can wait. You can slide it back anytime.";
+  return "Some is ready to use. Some can wait. Either way is a good choice.";
 }
 
 function parsePiggy(raw) {
@@ -148,11 +210,86 @@ function piggyAmountHtml(piggy, large) {
   return `<div class="${cls}">${money(piggy.amount)}</div>`;
 }
 
+function splitPairHtml(split) {
+  if (!split) return "";
+  return `<div class="split-pair" data-split-pair>Spend ${money(split.spend)} · Save ${money(split.save)}</div>`;
+}
+
+function piggyIntentHtml(piggy) {
+  const split = splitOf(piggy);
+  if (!split) return "";
+  const hint =
+    split.save > 0
+      ? "You chose this from your count. Your savings account number stays the same."
+      : "Nothing set aside yet. Slide on your piggy if you want some to wait.";
+  return `<div class="intent-block">
+    <div class="intent-line">
+      <span class="intent-label">To save from piggy</span>
+      <span class="intent-amt">${money(split.save)}</span>
+    </div>
+    <p class="counted-hint">${esc(hint)}</p>
+  </div>`;
+}
+
+function renderSplitCard(piggy) {
+  if (!piggy) {
+    return `<div class="card soft">
+      <p class="blurb" style="color:#141416">Update your count, then you can choose what to use soon and what can wait.</p>
+    </div>`;
+  }
+  const split = splitOf(piggy);
+  if (split.totalCents <= 0) {
+    return `<div class="card soft">
+      <p class="blurb" style="color:#141416">When your count is more than zero, you can slide to let some wait.</p>
+    </div>`;
+  }
+  const spendPct = ((split.spendCents / split.totalCents) * 100).toFixed(4);
+  return `<div class="card split-card" data-split-card data-total-cents="${split.totalCents}">
+    <label class="piggy-label" for="piggy-split">Use soon, or let some wait?</label>
+    <p class="blurb">Slide to choose. What you keep is ready to use. What you move over can wait. Waiting is a choice, not a punishment.</p>
+    <div class="split-readout">
+      <div class="split-side">
+        <div class="jar-name">Spend</div>
+        <div class="split-amt spend" data-split-spend>${money(split.spend)}</div>
+        <div class="blurb">Ready to use</div>
+      </div>
+      <div class="split-side">
+        <div class="jar-name">Save</div>
+        <div class="split-amt save" data-split-save>${money(split.save)}</div>
+        <div class="blurb">Can wait</div>
+      </div>
+    </div>
+    <input
+      id="piggy-split"
+      class="split-range"
+      data-split-range
+      type="range"
+      min="0"
+      max="${split.totalCents}"
+      step="1"
+      value="${split.saveCents}"
+      style="--spend-pct:${spendPct}%"
+      aria-valuemin="0"
+      aria-valuemax="${split.total}"
+      aria-valuenow="${split.save}"
+      aria-valuetext="Save ${money(split.save)}, Spend ${money(split.spend)}"
+    />
+    <div class="split-ends">
+      <span>Use soon</span>
+      <span>Let it wait</span>
+    </div>
+    <p class="split-pair split-pair-live" data-split-pair>Spend ${money(split.spend)} · Save ${money(split.save)}</p>
+    <p class="counted-hint split-mood" data-split-mood>${esc(splitMood(split))}</p>
+    <p class="counted-hint piggy-help" data-split-total>Together this is the ${money(split.total)} you counted.</p>
+  </div>`;
+}
+
 function renderHome(kid) {
   const g = kid.grow;
   const s = kid.save;
   const piggy = kid.piggy;
-  const spendBlurb = piggy ? kid.spend.blurb : kid.spend.emptyHint;
+  const split = splitOf(piggy);
+  const spendBlurb = piggy ? "Cash you counted" : kid.spend.emptyHint;
   const counted = piggy && piggy.countedAt ? countedOn(piggy.countedAt) : "";
   return shell(`
     <div class="brand">Family money</div>
@@ -164,6 +301,7 @@ function renderHome(kid) {
       <div class="jar-name">Spend</div>
       <div class="role">Piggy bank</div>
       ${piggyAmountHtml(piggy, false)}
+      ${splitPairHtml(split)}
       <div class="blurb">${esc(spendBlurb)}</div>
       ${counted ? `<div class="counted-hint">${esc(counted)}</div>` : ""}
       <div class="why">Why this jar? · ${esc(kid.spend.why)}</div>
@@ -175,6 +313,7 @@ function renderHome(kid) {
       <div class="role">Savings account</div>
       <div class="amount">${money(s.balance)}</div>
       <div class="blurb">${esc(s.blurbHome)}</div>
+      ${piggyIntentHtml(piggy)}
       <div class="why">Why this jar? · ${esc(s.why)}</div>
     </button>
 
@@ -214,7 +353,8 @@ function renderSpend(kid) {
     <div class="jar-name" style="margin-top:6px">Spend</div>
     <div class="role">Piggy bank</div>
     ${piggyAmountHtml(piggy, true)}
-    <p class="sub" style="margin-bottom:12px">${esc(piggy ? kid.spend.blurb : kid.spend.emptyHint)}</p>
+    ${splitPairHtml(splitOf(piggy))}
+    <p class="sub" style="margin-bottom:12px">${esc(piggy ? "Cash you counted" : kid.spend.emptyHint)}</p>
     ${counted ? `<p class="counted-hint counted-block">${esc(counted)}</p>` : ""}
 
     <div class="card piggy-card">
@@ -244,6 +384,8 @@ function renderSpend(kid) {
       </form>
     </div>
 
+    ${renderSplitCard(piggy)}
+
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(kid.spend.tip)}</span></p>
     </div>
@@ -268,6 +410,7 @@ function renderSave(kid) {
     <div class="role">Savings account</div>
     <div class="amount lg">${money(s.balance)}</div>
     <p class="sub" style="margin-bottom:12px">${esc(s.blurbDetail)}</p>
+    ${piggyIntentHtml(kid.piggy)}
 
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(s.tip)}</span></p>
@@ -471,8 +614,43 @@ function bind(kid) {
     state.piggyDraft = saved.amount.toFixed(2);
     state.piggyError = "";
     render(kid);
-    window.scrollTo(0, 0);
+    const splitCard = document.querySelector("[data-split-card]");
+    if (splitCard) splitCard.scrollIntoView({ block: "nearest" });
   });
+
+  const card = document.querySelector("[data-split-card]");
+  if (!card) return;
+  const range = card.querySelector("[data-split-range]");
+  const totalCents = Number(card.getAttribute("data-total-cents"));
+  const paintSplit = (saveCents, persist) => {
+    const spendCents = totalCents - saveCents;
+    const spend = fromCents(spendCents);
+    const save = fromCents(saveCents);
+    const total = fromCents(totalCents);
+    const pair = "Spend " + money(spend) + " · Save " + money(save);
+    document.querySelectorAll("[data-split-spend]").forEach((el) => {
+      el.textContent = money(spend);
+    });
+    document.querySelectorAll("[data-split-save]").forEach((el) => {
+      el.textContent = money(save);
+    });
+    document.querySelectorAll("[data-split-pair]").forEach((el) => {
+      el.textContent = pair;
+    });
+    const mood = card.querySelector("[data-split-mood]");
+    if (mood) mood.textContent = splitMood({ totalCents, saveCents, spendCents });
+    const spendPct = totalCents === 0 ? 100 : (spendCents / totalCents) * 100;
+    range.style.setProperty("--spend-pct", spendPct + "%");
+    range.setAttribute("aria-valuenow", String(save));
+    range.setAttribute("aria-valuetext", "Save " + money(save) + ", Spend " + money(spend));
+    if (!persist) return;
+    const stored = writeSplit(kid, save);
+    if (stored) kid.piggy = stored;
+  };
+  range.addEventListener("input", () => {
+    paintSplit(Number(range.value), true);
+  });
+  paintSplit(Number(range.value), false);
 }
 
 const kid = readKid();
