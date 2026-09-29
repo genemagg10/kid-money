@@ -17,7 +17,7 @@ Jar map, in this order: **Spend** is the editable piggy plus money owed. **Save*
 
 Warren’s Phase 1 lessons (L1–L6) show up in the kid pages, one idea at a time.
 
-- **Home** — “Your money has jobs.” Each jar’s Why line is that job: use soon, wait on purpose, grow for a long time. A Learn card shows the current lesson and gentle progress, such as 2 of 6.
+- **Home** — “Your money has jobs.” Each jar’s Why line is that job: use soon, wait on purpose, grow for a long time. A Learn card shows the current lesson, a concrete example, and gentle progress such as 2 of 6. Jar cards use the same pictures: ice cream after soccer, waiting for a bike, school later, and a job someday.
 - **Learn** — L1 Three jars, L2 Your dashboard, L3 This month, L4 Save vs Spend, L5 Grow for later, L6 Privacy. “I got it” unlocks the next lesson. Continue moves on. Ask a grown-up saves an optional note.
 - **Spend** — Counting the piggy and the brown/blue slider are the Save vs Spend activity. Money owed stays on this jar.
 - **Save** — Tip, Why, and This month, plus “Name one thing you’re waiting for.” The savings number does not change from this page.

@@ -30,6 +30,9 @@ const state = {
   parentError: "",
   parentNote: "",
   parentNoteFlash: "",
+  monthPick: "",
+  pathPick: "",
+  privacyOn: false,
 };
 
 const LESSONS = [
@@ -38,9 +41,10 @@ const LESSONS = [
     title: "Three jars",
     sub: "Spend, Save, and Grow",
     home: "Spend uses soon. Save waits. Grow works for a long time.",
+    example: "Ice cream, a bike, and school later",
     body: [
       "Your money has three jobs.",
-      "Spend is for soon. Save waits on purpose. Grow works for a long time — college, and later life. Grown-ups help with the long one.",
+      "Spend can be ice cream after soccer. Save can be waiting for a bike. Grow can be money growing while you’re still in school.",
     ],
     activity: "sort",
   },
@@ -49,9 +53,10 @@ const LESSONS = [
     title: "Your dashboard",
     sub: "Find your name and each jar",
     home: "Find your name, then each jar’s job.",
+    example: "Your name, then ice cream, a bike, and school later",
     body: [
       "This page is yours, {name}. Your name is at the top.",
-      "Spend shows the cash you counted. Save shows your savings-account number. Grow shows a college path and a retirement path — those two paths do not show dollar totals.",
+      "Spend shows cash you counted — picture ice cream after soccer. Save shows the number that waits — picture a bike. Grow shows a college path and a retirement path, not dollar totals for those.",
     ],
     activity: "notice",
   },
@@ -60,8 +65,9 @@ const LESSONS = [
     title: "This month",
     sub: "Notice what changed, or what didn’t",
     home: "Notice what came in, or what stayed the same.",
+    example: "A birthday gift, or a quiet week",
     body: [
-      "Sometimes money comes in — a gift, or money for helping at home. Sometimes a number stays the same.",
+      "Sometimes money comes in — a birthday gift, or money for helping at home. Sometimes it is a quiet week and the number stays the same.",
       "Noticing is the win. A bigger number is not better, and staying the same still counts.",
     ],
     activity: "month",
@@ -71,8 +77,9 @@ const LESSONS = [
     title: "Save vs Spend",
     sub: "Ready now, or wait",
     home: "Use the piggy slider: ready now, or wait.",
+    example: "Ice cream now, or part of a bike",
     body: [
-      "Your piggy is cash at home. Some can be ready now. Some can wait.",
+      "Your piggy is cash at home. Some can be ready now, like ice cream after soccer. Some can wait, like part of a bike.",
       "Waiting is a choice, not a punishment. The slider does not change your savings account.",
     ],
     activity: "slider",
@@ -82,9 +89,10 @@ const LESSONS = [
     title: "Grow for later",
     sub: "College path and retirement path",
     home: "Point to the college path and the retirement path.",
+    example: "School later. A job someday.",
     body: [
-      "College path is for school later. It can grow while you are still a kid. Filling it is not only your job — grown-ups help.",
-      "Retirement path is for when you are much older. You see that it has started. You do not see a dollar total for college or for retirement.",
+      "College path is money growing while you’re still in school. Filling it is not only your job — grown-ups help.",
+      "Retirement path is money that waits until you’re a grown-up with a job. You see the path, not a dollar total.",
     ],
     activity: "paths",
   },
@@ -93,8 +101,9 @@ const LESSONS = [
     title: "Your jars stay yours",
     sub: "Not a contest",
     home: "We don’t compare jars as a contest.",
+    example: "No contest about ice-cream money",
     body: [
-      "We don’t line up jars with friends, or with anyone else in the family, to see who has more.",
+      "We don’t line up ice-cream money, or bike money, to see who has more — not with friends, and not at home.",
       "This page is only yours. Knowing what each jar is for matters. A contest does not.",
     ],
     activity: "privacy",
@@ -102,16 +111,31 @@ const LESSONS = [
 ];
 
 const SORTS = [
-  { prompt: "Cash you might use this week", answer: "spend", yes: "Spend is for soon." },
-  { prompt: "Money waiting for something you want later", answer: "save", yes: "Save’s job is to wait." },
-  { prompt: "Money for college, and for when you’re much older", answer: "grow", yes: "Grow is the long job. Grown-ups help." },
+  {
+    prompt: "Ice cream after soccer",
+    detail: "A pretend dollar you might use soon.",
+    answer: "spend",
+    yes: "Spend is for soon.",
+  },
+  {
+    prompt: "Waiting for a bike",
+    detail: "A pretend dollar that waits on purpose.",
+    answer: "save",
+    yes: "Save’s job is to wait.",
+  },
+  {
+    prompt: "Growing while you’re in school",
+    detail: "A pretend dollar for a long time. Grown-ups help.",
+    answer: "grow",
+    yes: "Grow is the long job.",
+  },
 ];
 
 const NOTICES = [
   { id: "name", label: "My name is on this page" },
-  { id: "spend", label: "Spend shows the cash I counted" },
-  { id: "save", label: "Save shows the number that waits" },
-  { id: "grow", label: "Grow shows a college path and a retirement path" },
+  { id: "spend", label: "Spend — like ice cream after soccer" },
+  { id: "save", label: "Save — like waiting for a bike" },
+  { id: "grow", label: "Grow — school later, and a job someday" },
 ];
 
 const $ = (sel) => document.querySelector(sel);
@@ -437,6 +461,9 @@ function focusLesson(kid, reviewId) {
   state.sortIndex = 0;
   state.sortNote = "";
   state.noticed = {};
+  state.monthPick = "";
+  state.pathPick = "";
+  state.privacyOn = false;
   state.askOpen = false;
   state.askFlash = "";
   const progress = readLearn(kid);
@@ -449,6 +476,46 @@ function jarWord(id) {
   if (id === "spend") return "Spend";
   if (id === "save") return "Save";
   return "Grow";
+}
+
+function mark(kind) {
+  const paths = {
+    spend: '<circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.6 12h6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+    save: '<rect x="7" y="5" width="10" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 9h5M9.5 12.2h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+    college: '<path d="M4 16.5c2.4-3.2 4.6-4.8 8-4.8s5.6 1.6 8 4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.2" r="2" fill="currentColor"/>',
+    retire: '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8.2V12l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    notice: '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/>',
+    yours: '<circle cx="12" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.6 18.2c.8-2.5 2.7-3.8 5.4-3.8s4.6 1.3 5.4 3.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  };
+  const icon = paths[kind] || paths.notice;
+  return `<span class="mark ${esc(kind)}" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22">${icon}</svg></span>`;
+}
+
+function sceneHtml(kind, title, line) {
+  return `<div class="scene">${mark(kind)}<div><div class="scene-title">${esc(title)}</div>${line ? `<div class="blurb">${esc(line)}</div>` : ""}</div></div>`;
+}
+
+function sceneButton(kind, title, line, attrs, on) {
+  return `<button type="button" class="scene-btn${on ? " on" : ""}" ${attrs} aria-pressed="${on ? "true" : "false"}">${mark(kind)}<span><span class="scene-title">${esc(title)}</span>${line ? `<span class="blurb">${esc(line)}</span>` : ""}</span></button>`;
+}
+
+function lessonMark(id) {
+  if (id === "l1" || id === "l4") return "spend";
+  if (id === "l5") return "college";
+  if (id === "l6") return "yours";
+  return "notice";
+}
+
+function learnExamples(lesson) {
+  if (!lesson) return "";
+  if (lesson.id === "l1") {
+    return [
+      sceneHtml("spend", "Ice cream after soccer", "Use soon"),
+      sceneHtml("save", "Waiting for a bike", "Wait"),
+      sceneHtml("college", "While you’re in school", "Grow for a long time"),
+    ].join("");
+  }
+  return sceneHtml(lessonMark(lesson.id), lesson.example, "");
 }
 
 function rowsHtml(rows) {
@@ -488,31 +555,33 @@ function renderSplitCard(piggy) {
   if (!piggy) {
     return `<div class="card soft">
       <div class="activity-kicker">Activity · Ready now or wait</div>
-      <p class="blurb" style="color:#141416">Update your count, then you can choose what to use soon and what can wait.</p>
+      <p class="blurb" style="color:#141416">Update your count, then slide. Brown can be ice cream after soccer. Blue can wait for a bike.</p>
     </div>`;
   }
   const split = splitOf(piggy);
   if (split.totalCents <= 0) {
     return `<div class="card soft">
       <div class="activity-kicker">Activity · Ready now or wait</div>
-      <p class="blurb" style="color:#141416">When your count is more than zero, you can slide to let some wait.</p>
+      <p class="blurb" style="color:#141416">When your count is more than zero, slide some for later — like part of a bike.</p>
     </div>`;
   }
   const splitRatio = split.totalCents === 0 ? 1 : split.spendCents / split.totalCents;
   return `<div class="card split-card" data-split-card data-total-cents="${split.totalCents}" data-activity="l4">
     <div class="activity-kicker">Activity · Ready now or wait</div>
     <label class="piggy-label" for="piggy-split">Use soon, or let some wait?</label>
-    <p class="blurb">This is the Save vs Spend practice. Drag the line. Brown is ready to use. Blue can wait. Waiting is a choice, not a punishment.</p>
+    <p class="blurb">This is the Save vs Spend practice. Brown can be ice cream after soccer. Blue can wait for a bike. Waiting is a choice, not a punishment.</p>
     <div class="split-readout">
       <div class="split-side">
         <div class="jar-name">Spend</div>
         <div class="split-amt spend" data-split-spend>${money(split.spend)}</div>
         <div class="blurb">Ready to use</div>
+        <div class="example-tag">Ice cream after soccer</div>
       </div>
       <div class="split-side">
         <div class="jar-name">Save</div>
         <div class="split-amt save" data-split-save>${money(split.save)}</div>
         <div class="blurb">Can wait</div>
+        <div class="example-tag">Waiting for a bike</div>
       </div>
     </div>
     <div class="split-slider" style="--split:${splitRatio}">
@@ -618,6 +687,7 @@ function renderHome(kid) {
       ${owedSummaryHtml(split, kid.owed)}
       <div class="blurb">${esc(spendBlurb)}</div>
       ${counted ? `<div class="counted-hint">${esc(counted)}</div>` : ""}
+      ${sceneHtml("spend", "Ice cream after soccer", "An example of soon")}
       <div class="why">Why this jar? · ${esc(kid.spend.why)}</div>
     </button>
 
@@ -628,6 +698,7 @@ function renderHome(kid) {
       <div class="amount">${money(s.balance)}</div>
       <div class="blurb">${esc(s.blurbHome)}</div>
       ${piggyIntentHtml(piggy)}
+      ${sceneHtml("save", "Waiting for a bike", "An example of waiting")}
       <div class="why">Why this jar? · ${esc(s.why)}</div>
     </button>
 
@@ -637,10 +708,12 @@ function renderHome(kid) {
       <div class="progress-label">College path</div>
       ${progressTrack(g.college.pct, "college", "College path")}
       <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
+      ${sceneHtml("college", "While you’re in school", "Money growing while you’re still in school")}
       <div class="jar-split">
         <div class="progress-label">Retirement path</div>
         <div class="grow-state">${esc(g.retirement.state)}</div>
         <div class="blurb">${esc(g.retirement.home)}</div>
+        ${sceneHtml("retire", "A job someday", "Money that waits until you’re a grown-up with a job")}
       </div>
       <div class="jar-split">
         <div class="progress-label">Invested / Growing</div>
@@ -681,7 +754,7 @@ function renderSpend(kid) {
       <form data-piggy-form novalidate>
         <div class="activity-kicker">Activity · Count your piggy</div>
         <label class="piggy-label" for="piggy-amount">${esc(kid.spend.prompt)}</label>
-        <p class="blurb">This is part of Save vs Spend. Count the cash you can use soon, then update the total.</p>
+        <p class="blurb">This is part of Save vs Spend. Count the cash you can use soon — picture ice cream after soccer — then update the total.</p>
         <div class="money-field">
           <span aria-hidden="true">$</span>
           <input
@@ -774,8 +847,10 @@ function renderGrow(kid) {
 
     <div class="card" data-activity="l5">
       <div class="activity-kicker">Activity · Two paths</div>
-      <p class="blurb" style="color:#141416;margin-bottom:6px">Point to College path and say what it is for. Then point to Retirement path.</p>
-      <p class="blurb">College is for school later. Retirement is for when you’re much older. No dollar totals on either path. Grown-ups help.</p>
+      <p class="blurb" style="color:#141416;margin-bottom:8px">Tap a path and say the line. No dollar totals on either one.</p>
+      ${sceneButton("college", "College path", "Money growing while you’re still in school.", 'data-path-example="college"', state.pathPick === "college")}
+      ${sceneButton("retire", "Retirement path", "Money that waits until you’re a grown-up with a job.", 'data-path-example="retire"', state.pathPick === "retire")}
+      ${state.pathPick ? `<p class="sort-note ok">That’s the one. Grown-ups help.</p>` : ""}
     </div>
 
     <div class="chips" style="margin-bottom:8px">
@@ -799,7 +874,7 @@ function renderGrow(kid) {
       ${progressTrack(g.college.pct, "college", "College path")}
       <div class="milestone-row">${ringsHtml(g.college.rings)}</div>
       <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
-      <p class="blurb" style="margin-top:8px">Say what this path is for: school later. Grown-ups help — it is not only your job.</p>
+      <p class="blurb" style="margin-top:8px">Money growing while you’re still in school. Grown-ups help — it is not only your job.</p>
     </div>
 
     <div class="card">
@@ -823,7 +898,7 @@ function monthPanel(jar) {
   const list = rows.length
     ? `<div class="card">${rowsHtml(rows)}</div>`
     : `<div class="card soft">
-         <p class="blurb" style="color:#141416;margin-bottom:6px">Did anything come in, or did this number stay the same?</p>
+         <p class="blurb" style="color:#141416;margin-bottom:6px">A birthday gift came in — or it was a quiet week and this number stayed the same.</p>
          <p class="blurb">Noticing counts. The size does not. A grown-up keeps what moved.</p>
        </div>`;
   const more = story
@@ -888,6 +963,7 @@ function learnHomeCard(kid) {
     <div class="learn-kicker">Learn · ${doneCount} of ${total}</div>
     <div class="role">${esc(title)}</div>
     <p class="blurb">${esc(blurb)}</p>
+    ${learnExamples(current)}
     <div class="progress-track" role="progressbar" aria-label="Lessons noticed" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${doneCount}"><div class="progress-fill" style="width:${width}%"></div></div>
     <button type="button" class="learn-done secondary" data-go="learn">${esc(cta)}</button>
   </div>`;
@@ -900,6 +976,7 @@ function renderWaitingCard(kid) {
     <form data-wait-form novalidate>
       <div class="activity-kicker">Activity</div>
       <label class="piggy-label" for="waiting-for">Name one thing you’re waiting for</label>
+      ${sceneHtml("save", "Waiting for a bike", "One example. Yours can be different.")}
       <p class="blurb">A goal, a gift, something later. Waiting is the job of this jar.</p>
       <input
         id="waiting-for"
@@ -909,7 +986,7 @@ function renderWaitingCard(kid) {
         maxlength="60"
         autocomplete="off"
         enterkeyhint="done"
-        placeholder="Something later"
+        placeholder="Waiting for a bike"
         value="${esc(state.waitDraft)}"
       />
       ${flash}
@@ -923,23 +1000,25 @@ function sortActivityHtml() {
   const doneRows = SORTS.slice(0, state.sortIndex)
     .map(
       (item) =>
-        `<div class="sort-row"><span class="sort-jar ${item.answer}">${jarWord(item.answer)}</span><span class="sort-copy">${esc(item.prompt)}<span class="sort-yes">${esc(item.yes)}</span></span></div>`
+        `<div class="sort-row">${mark(item.answer)}<span class="sort-jar ${item.answer}">${jarWord(item.answer)}</span><span class="sort-copy">${esc(item.prompt)}<span class="sort-yes">${esc(item.yes)}</span></span></div>`
     )
     .join("");
   const current = SORTS[state.sortIndex];
   if (!current) {
     return `<div class="card" data-activity="l1">
-      <div class="activity-kicker">Activity · Sort the jobs</div>
+      <div class="activity-kicker">See it · three pretend dollars</div>
       ${doneRows}
       <p class="sort-note ok">You can tell the three jobs apart.</p>
     </div>`;
   }
   const note = state.sortNote ? `<p class="sort-note">${esc(state.sortNote)}</p>` : "";
   return `<div class="card" data-activity="l1">
-    <div class="activity-kicker">Activity · Sort the jobs</div>
+    <div class="activity-kicker">See it · three pretend dollars</div>
     ${doneRows}
-    <p class="blurb" style="color:#141416;margin:8px 0 4px">Which job fits?</p>
+    <p class="blurb" style="color:#141416;margin:8px 0 4px">Which jar gets this pretend dollar?</p>
+    <p class="pretend">Pretend $1</p>
     <p class="role">${esc(current.prompt)}</p>
+    <p class="blurb">${esc(current.detail)}</p>
     <div class="chips" role="group" aria-label="Which jar">
       <button type="button" class="chip" data-sort="spend">Spend</button>
       <button type="button" class="chip" data-sort="save">Save</button>
@@ -975,34 +1054,38 @@ function activityHtml(lesson) {
   if (lesson.activity === "sort") return sortActivityHtml();
   if (lesson.activity === "notice") return noticeActivityHtml();
   if (lesson.activity === "month") {
-    return linkActivity(
-      "Activity · Notice one thing",
-      "Open Save and tap This month. See if something came in, or if the number stayed the same.",
-      "Open This month",
-      "save",
-      "month"
-    );
+    const picked = state.monthPick;
+    return `<div class="card" data-activity="l3">
+      <div class="activity-kicker">See it · notice one thing</div>
+      <p class="blurb" style="color:#141416;margin-bottom:8px">Tap the one you noticed. Either one counts.</p>
+      ${sceneButton("notice", "A birthday gift came in", "Something arrived. The size is not the point.", 'data-month-example="in"', picked === "in")}
+      ${sceneButton("notice", "A quiet week", "The number stayed the same.", 'data-month-example="same"', picked === "same")}
+      ${picked ? `<p class="sort-note ok">You noticed. That is enough.</p>` : ""}
+      <button type="button" class="learn-done secondary" data-go="save" data-open-panel="month">Open This month</button>
+    </div>`;
   }
   if (lesson.activity === "slider") {
-    return linkActivity(
-      "Activity · Ready now or wait",
-      "Count your piggy, then move the slider. Brown is ready to use. Blue can wait.",
-      "Open the slider",
-      "spend"
-    );
+    return `<div class="card" data-activity="l4">
+      <div class="activity-kicker">See it · ready now or wait</div>
+      ${sceneHtml("spend", "Ice cream after soccer", "The brown side. Ready now.")}
+      ${sceneHtml("save", "Waiting for a bike", "The blue side. Can wait.")}
+      <button type="button" class="learn-done secondary" data-go="spend">Open the slider</button>
+    </div>`;
   }
   if (lesson.activity === "paths") {
-    return linkActivity(
-      "Activity · Point and say",
-      "On Grow, point to College path and say it is for school later. Point to Retirement path and say it is for when you’re much older.",
-      "Open Grow",
-      "grow"
-    );
+    return `<div class="card" data-activity="l5">
+      <div class="activity-kicker">See it · two paths</div>
+      <p class="blurb" style="color:#141416;margin-bottom:8px">Tap a path and say the line.</p>
+      ${sceneButton("college", "College path", "Money growing while you’re still in school.", 'data-path-example="college"', state.pathPick === "college")}
+      ${sceneButton("retire", "Retirement path", "Money that waits until you’re a grown-up with a job.", 'data-path-example="retire"', state.pathPick === "retire")}
+      ${state.pathPick ? `<p class="sort-note ok">That’s the one. Grown-ups help. No dollar total on that path.</p>` : ""}
+      <button type="button" class="learn-done secondary" data-go="grow">Open Grow</button>
+    </div>`;
   }
   return `<div class="card" data-activity="l6">
-    <div class="activity-kicker">Activity · Say it once</div>
-    <p class="role">My jars are mine.</p>
-    <p class="blurb">We don’t turn them into a contest — not with friends, and not at home.</p>
+    <div class="activity-kicker">See it · say it once</div>
+    ${sceneButton("yours", "My jars are mine.", "We don’t ask who has more ice-cream money.", "data-privacy", state.privacyOn)}
+    ${state.privacyOn ? `<p class="sort-note ok">That’s our rule.</p>` : ""}
   </div>`;
 }
 
@@ -1454,6 +1537,27 @@ function bind(kid) {
       captureDrafts();
       const id = el.getAttribute("data-notice");
       state.noticed[id] = !state.noticed[id];
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-month-example]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      state.monthPick = el.getAttribute("data-month-example");
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-path-example]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      state.pathPick = el.getAttribute("data-path-example");
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-privacy]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      state.privacyOn = !state.privacyOn;
       rerender(kid);
     });
   });

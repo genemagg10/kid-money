@@ -31,6 +31,21 @@ One at a time. The next one unlocks after this one is noticed. No streaks.
 
 Home shows the current lesson and a count such as 2 of 6. Tips and Why lines teach the same jobs in place.
 
+## Examples
+
+The same pictures show up on Home, in each lesson, and on the jar screens. They are pretend scenes, not balances.
+
+| Idea | Line to say |
+|---|---|
+| Spend | Ice cream after soccer |
+| Save | Waiting for a bike |
+| Grow, college | Money growing while you’re still in school |
+| Grow, retirement | Money that waits until you’re a grown-up with a job |
+| This month | A birthday gift came in, or a quiet week and the number stayed |
+| Privacy | We don’t ask who has more ice-cream money |
+
+L1 sorts three pretend dollars into those jars. L4 labels the real piggy slider with the ice-cream and bike examples. L5 is a tap on College path or Retirement path. Icons are small line marks in the jar colors, not a separate illustration style.
+
 ## Saved on this iPad
 
 | Key | What |
