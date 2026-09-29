@@ -1,6 +1,6 @@
 /* One child per page. Account balances come only from #kid-data.
-   Piggy counts and the spend/save split are saved on this device, one key per child.
-   The split does not change the savings-account balance. */
+   Piggy counts, the spend/save split, and money owed are saved on this device, one key per child.
+   The split and anything owed do not change the savings-account balance. */
 
 const state = {
   screen: "home",
@@ -8,6 +8,8 @@ const state = {
   panel: "why",
   piggyDraft: "",
   piggyError: "",
+  owedDraft: "",
+  owedError: "",
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -83,6 +85,45 @@ function writePiggy(kid, amount) {
   });
 }
 
+function owedKey(kid) {
+  return "family-money-owed:" + profileId(kid);
+}
+
+function readOwed(kid) {
+  try {
+    const raw = localStorage.getItem(owedKey(kid));
+    if (!raw) return { amount: 0 };
+    const data = JSON.parse(raw);
+    if (!data || typeof data.amount !== "number" || !Number.isFinite(data.amount) || data.amount <= 0) {
+      return { amount: 0 };
+    }
+    const amount = Math.round(data.amount * 100) / 100;
+    if (amount > 9999.99) return { amount: 0 };
+    return { amount };
+  } catch (err) {
+    return { amount: 0 };
+  }
+}
+
+function writeOwed(kid, amount) {
+  const total = Math.round(Number(amount) * 100) / 100;
+  if (!Number.isFinite(total) || total <= 0) {
+    try {
+      localStorage.removeItem(owedKey(kid));
+    } catch (err) {
+      return null;
+    }
+    return { amount: 0 };
+  }
+  if (total > 9999.99) return null;
+  try {
+    localStorage.setItem(owedKey(kid), JSON.stringify({ amount: total }));
+    return { amount: total };
+  } catch (err) {
+    return null;
+  }
+}
+
 function writeSplit(kid, saveAmount) {
   const prev = readPiggy(kid);
   if (!prev) return null;
@@ -120,11 +161,34 @@ function splitOf(piggy) {
   };
 }
 
+function readyText(spendCents, owedAmount) {
+  const owedCents = toCents(owedAmount || 0);
+  if (owedCents <= 0) return "";
+  const ready = Math.max(0, spendCents - owedCents);
+  let text = "Still ready to use · " + money(fromCents(ready));
+  if (owedCents > spendCents) text += ". You can pay the rest when you have it.";
+  return text;
+}
+
 function splitMood(split) {
   if (!split || split.totalCents <= 0) return "";
   if (split.saveCents === 0) return "All of this is ready to use. Slide if you want some to wait.";
   if (split.spendCents === 0) return "All of this can wait. You can slide it back anytime.";
   return "Some is ready to use. Some can wait. Either way is a good choice.";
+}
+
+function parseOwed(raw) {
+  const text = String(raw).trim().replace(/[$,\s]/g, "");
+  if (!text) return { error: "Type how much you owe." };
+  if (/^0*(?:\.0{0,2})?$/.test(text)) return { amount: 0 };
+  if (!/^(?:\d+\.\d{0,2}|\d+|\.\d{1,2})$/.test(text)) {
+    if (/^\d+\.\d{3,}$/.test(text)) return { error: "Use dollars and cents, like 4.00." };
+    return { error: "Use numbers, like 4.00." };
+  }
+  const amount = Math.round(Number(text) * 100) / 100;
+  if (!Number.isFinite(amount) || amount < 0) return { error: "Use numbers, like 4.00." };
+  if (amount > 9999.99) return { error: "That looks too big. Try again." };
+  return { amount };
 }
 
 function parsePiggy(raw) {
@@ -237,7 +301,7 @@ function renderSplitCard(piggy) {
   const spendPct = ((split.spendCents / split.totalCents) * 100).toFixed(4);
   return `<div class="card split-card" data-split-card data-total-cents="${split.totalCents}">
     <label class="piggy-label" for="piggy-split">Use soon, or let some wait?</label>
-    <p class="blurb">Slide to choose. What you keep is ready to use. What you move over can wait. Waiting is a choice, not a punishment.</p>
+    <p class="blurb">Slide toward Let it wait to set some aside. Brown is ready to use. Blue can wait. Waiting is a choice, not a punishment.</p>
     <div class="split-readout">
       <div class="split-side">
         <div class="jar-name">Spend</div>
@@ -250,21 +314,26 @@ function renderSplitCard(piggy) {
         <div class="blurb">Can wait</div>
       </div>
     </div>
-    <input
-      id="piggy-split"
-      class="split-range"
-      data-split-range
-      type="range"
-      min="0"
-      max="${split.totalCents}"
-      step="1"
-      value="${split.saveCents}"
-      style="--spend-pct:${spendPct}%"
-      aria-valuemin="0"
-      aria-valuemax="${split.total}"
-      aria-valuenow="${split.save}"
-      aria-valuetext="Save ${money(split.save)}, Spend ${money(split.spend)}"
-    />
+    <div class="split-slider">
+      <div class="split-gauge" aria-hidden="true">
+        <div class="split-gauge-spend" data-gauge-spend style="width:${spendPct}%"></div>
+        <div class="split-gauge-save" data-gauge-save style="width:${(100 - Number(spendPct)).toFixed(4)}%"></div>
+      </div>
+      <input
+        id="piggy-split"
+        class="split-range"
+        data-split-range
+        type="range"
+        min="0"
+        max="${split.totalCents}"
+        step="1"
+        value="${split.saveCents}"
+        aria-valuemin="0"
+        aria-valuemax="${split.total}"
+        aria-valuenow="${split.save}"
+        aria-valuetext="Save ${money(split.save)}, Spend ${money(split.spend)}"
+      />
+    </div>
     <div class="split-ends">
       <span>Use soon</span>
       <span>Let it wait</span>
@@ -272,6 +341,56 @@ function renderSplitCard(piggy) {
     <p class="split-pair split-pair-live" data-split-pair>Spend ${money(split.spend)} · Save ${money(split.save)}</p>
     <p class="counted-hint split-mood" data-split-mood>${esc(splitMood(split))}</p>
     <p class="counted-hint piggy-help" data-split-total>Together this is the ${money(split.total)} you counted.</p>
+  </div>`;
+}
+
+function owedSummaryHtml(split, owed) {
+  if (!owed || !(owed.amount > 0)) return "";
+  const ready = split && split.totalCents > 0
+    ? `<div class="counted-hint">${esc(readyText(split.spendCents, owed.amount))}</div>`
+    : "";
+  return `<div class="owed-home">Money you owe · ${money(owed.amount)}</div>${ready}`;
+}
+
+function renderOwedCard(kid) {
+  const owed = kid.owed || { amount: 0 };
+  const split = splitOf(kid.piggy);
+  const has = owed.amount > 0;
+  const error = state.owedError
+    ? `<p class="piggy-error" role="alert">${esc(state.owedError)}</p>`
+    : "";
+  const ready = split && split.totalCents > 0 ? readyText(split.spendCents, owed.amount) : "";
+  return `<div class="card owed-card">
+    <label class="piggy-label" for="owed-amount">Money you owe</label>
+    <p class="blurb">When a grown-up pays for you, put it here until you pay them back.</p>
+    ${
+      has
+        ? `<div class="amount mid" data-owed-amount>${money(owed.amount)}</div>`
+        : `<div class="amount-empty" data-owed-amount>Nothing right now</div>`
+    }
+    ${ready ? `<p class="counted-hint owed-ready" data-owed-ready>${esc(ready)}</p>` : ""}
+    <form data-owed-form novalidate>
+      <p class="blurb owed-ask">How much do you owe?</p>
+      <div class="money-field owed-field">
+        <span aria-hidden="true">$</span>
+        <input
+          id="owed-amount"
+          data-owed-input
+          type="text"
+          inputmode="decimal"
+          enterkeyhint="done"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="0.00"
+          value="${esc(state.owedDraft)}"
+        />
+      </div>
+      ${error}
+      <button type="submit" class="owed-save">Update what I owe</button>
+    </form>
+    ${has ? `<button type="button" class="owed-clear" data-owed-clear>I paid it back</button>` : ""}
   </div>`;
 }
 
@@ -293,6 +412,7 @@ function renderHome(kid) {
       <div class="role">Piggy bank</div>
       ${piggyAmountHtml(piggy, false)}
       ${splitPairHtml(split)}
+      ${owedSummaryHtml(split, kid.owed)}
       <div class="blurb">${esc(spendBlurb)}</div>
       ${counted ? `<div class="counted-hint">${esc(counted)}</div>` : ""}
       <div class="why">Why this jar? · ${esc(kid.spend.why)}</div>
@@ -376,6 +496,8 @@ function renderSpend(kid) {
     </div>
 
     ${renderSplitCard(piggy)}
+
+    ${renderOwedCard(kid)}
 
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(kid.spend.tip)}</span></p>
@@ -528,6 +650,7 @@ function renderMonth(kid) {
 
 function render(kid) {
   kid.piggy = readPiggy(kid);
+  kid.owed = readOwed(kid);
   const root = $("#app");
   if (state.screen === "home") root.innerHTML = renderHome(kid);
   else if (state.screen === "spend") root.innerHTML = renderSpend(kid);
@@ -541,8 +664,11 @@ function render(kid) {
 function openScreen(kid, screen) {
   if (screen === "spend" && state.screen !== "spend") {
     const saved = readPiggy(kid);
+    const owed = readOwed(kid);
     state.piggyDraft = saved ? saved.amount.toFixed(2) : "";
     state.piggyError = "";
+    state.owedDraft = owed.amount > 0 ? owed.amount.toFixed(2) : "";
+    state.owedError = "";
   }
   state.screen = screen;
   state.panel = "why";
@@ -610,7 +736,7 @@ function bind(kid) {
   });
 
   const card = document.querySelector("[data-split-card]");
-  if (!card) return;
+  if (card) {
   const range = card.querySelector("[data-split-range]");
   const totalCents = Number(card.getAttribute("data-total-cents"));
   const paintSplit = (saveCents, persist) => {
@@ -631,7 +757,12 @@ function bind(kid) {
     const mood = card.querySelector("[data-split-mood]");
     if (mood) mood.textContent = splitMood({ totalCents, saveCents, spendCents });
     const spendPct = totalCents === 0 ? 100 : (spendCents / totalCents) * 100;
-    range.style.setProperty("--spend-pct", spendPct + "%");
+    const spendBar = card.querySelector("[data-gauge-spend]");
+    const saveBar = card.querySelector("[data-gauge-save]");
+    if (spendBar) spendBar.style.width = spendPct + "%";
+    if (saveBar) saveBar.style.width = (100 - spendPct) + "%";
+    const readyEl = document.querySelector("[data-owed-ready]");
+    if (readyEl) readyEl.textContent = readyText(spendCents, kid.owed ? kid.owed.amount : 0);
     range.setAttribute("aria-valuenow", String(save));
     range.setAttribute("aria-valuetext", "Save " + money(save) + ", Spend " + money(spend));
     if (!persist) return;
@@ -642,6 +773,54 @@ function bind(kid) {
     paintSplit(Number(range.value), true);
   });
   paintSplit(Number(range.value), false);
+  }
+
+  const owedForm = document.querySelector("[data-owed-form]");
+  if (owedForm) {
+    const owedInput = owedForm.querySelector("[data-owed-input]");
+    owedInput.addEventListener("input", () => {
+      state.owedDraft = owedInput.value;
+      if (!state.owedError) return;
+      state.owedError = "";
+      const alert = owedForm.querySelector("[role='alert']");
+      if (alert) alert.remove();
+    });
+    owedForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      state.owedDraft = owedInput.value;
+      const parsed = parseOwed(owedInput.value);
+      if (parsed.error) {
+        state.owedError = parsed.error;
+        render(kid);
+        const again = document.querySelector("[data-owed-input]");
+        if (again) again.focus();
+        return;
+      }
+      const stored = writeOwed(kid, parsed.amount);
+      if (!stored) {
+        state.owedError = "Couldn’t save that on this iPad. Try again.";
+        render(kid);
+        return;
+      }
+      kid.owed = stored;
+      state.owedDraft = stored.amount > 0 ? stored.amount.toFixed(2) : "";
+      state.owedError = "";
+      render(kid);
+      const owedCard = document.querySelector(".owed-card");
+      if (owedCard) owedCard.scrollIntoView({ block: "nearest" });
+    });
+  }
+  const clearOwed = document.querySelector("[data-owed-clear]");
+  if (clearOwed) {
+    clearOwed.addEventListener("click", () => {
+      const stored = writeOwed(kid, 0);
+      if (!stored) return;
+      kid.owed = stored;
+      state.owedDraft = "";
+      state.owedError = "";
+      render(kid);
+    });
+  }
 }
 
 const kid = readKid();
