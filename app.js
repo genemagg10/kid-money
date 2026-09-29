@@ -1,9 +1,12 @@
-/* One child per page. Balances come only from #kid-data on this page. */
+/* One child per page. Account balances come only from #kid-data.
+   Piggy counts are saved on this device, one key per child. */
 
 const state = {
   screen: "home",
   monthFrom: null,
   panel: "why",
+  piggyDraft: "",
+  piggyError: "",
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -14,10 +17,65 @@ function readKid() {
   try {
     const kid = JSON.parse(el.textContent);
     if (!kid || !kid.name || !kid.spend || !kid.save || !kid.grow) return null;
+    if (!kid.grow.college || !kid.grow.brokerage) return null;
     return kid;
   } catch (err) {
     return null;
   }
+}
+
+function profileId(kid) {
+  const path = (location.pathname || "").toLowerCase();
+  if (path.includes("/luca")) return "luca";
+  if (path.includes("/ella")) return "ella";
+  const id = String(kid.id || kid.name || "kid").toLowerCase();
+  return id;
+}
+
+function piggyKey(kid) {
+  return "family-money-piggy:" + profileId(kid);
+}
+
+function readPiggy(kid) {
+  try {
+    const raw = localStorage.getItem(piggyKey(kid));
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data.amount !== "number" || !Number.isFinite(data.amount)) return null;
+    if (data.amount < 0 || data.amount > 9999.99) return null;
+    return {
+      amount: Math.round(data.amount * 100) / 100,
+      countedAt: typeof data.countedAt === "string" ? data.countedAt : "",
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+function writePiggy(kid, amount) {
+  const payload = {
+    amount: Math.round(amount * 100) / 100,
+    countedAt: new Date().toISOString(),
+  };
+  try {
+    localStorage.setItem(piggyKey(kid), JSON.stringify(payload));
+    return payload;
+  } catch (err) {
+    return null;
+  }
+}
+
+function parsePiggy(raw) {
+  const text = String(raw).trim().replace(/[$,\s]/g, "");
+  if (!text) return { error: "Type how much you counted." };
+  if (!/^(?:\d+\.\d{0,2}|\d+|\.\d{1,2})$/.test(text)) {
+    if (/^\d+\.\d{3,}$/.test(text)) return { error: "Use dollars and cents, like 12.50." };
+    return { error: "Use numbers, like 12.50." };
+  }
+  const amount = Math.round(Number(text) * 100) / 100;
+  if (!Number.isFinite(amount) || amount < 0) return { error: "Use numbers, like 12.50." };
+  if (amount > 9999.99) return { error: "That looks too big for a piggy bank. Try counting again." };
+  return { amount };
 }
 
 function esc(value) {
@@ -36,19 +94,23 @@ function money(n) {
   return sign + "$" + Number(whole).toLocaleString("en-US") + "." + cents;
 }
 
-function goalBar(save, extraStyle) {
-  const target = Number(save.goalTarget);
-  if (!target) return "";
-  const pct = Math.max(0, Math.min(100, Math.round((Number(save.goalCurrent) / target) * 100)));
-  const style = extraStyle ? ` style="${extraStyle}"` : "";
-  return `<div class="goal-bar"${style}><div class="goal-fill" style="width:${pct}%"></div></div>`;
+function countedOn(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const opts = { weekday: "long", month: "long", day: "numeric" };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+  return "You counted on " + d.toLocaleDateString("en-US", opts);
 }
 
-function progressTrack(pct, cls) {
+function progressTrack(pct, cls, label) {
   if (pct == null || pct === "") return "";
   const width = Math.max(0, Math.min(100, Number(pct)));
   if (Number.isNaN(width)) return "";
-  return `<div class="progress-track"><div class="progress-fill ${cls}" style="width:${width}%"></div></div>`;
+  const aria = label
+    ? ` role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${width}"`
+    : "";
+  return `<div class="progress-track"${aria}><div class="progress-fill ${cls}" style="width:${width}%"></div></div>`;
 }
 
 function ringsHtml(kinds, numbered) {
@@ -80,50 +142,69 @@ function rowsHtml(rows) {
     .join("");
 }
 
+function piggyAmountHtml(piggy, large) {
+  if (!piggy) return `<div class="amount-empty">Not counted yet</div>`;
+  const cls = large ? "amount lg" : "amount";
+  return `<div class="${cls}">${money(piggy.amount)}</div>`;
+}
+
 function renderHome(kid) {
   const g = kid.grow;
   const s = kid.save;
+  const piggy = kid.piggy;
+  const spendBlurb = piggy ? kid.spend.blurb : kid.spend.emptyHint;
+  const counted = piggy && piggy.countedAt ? countedOn(piggy.countedAt) : "";
   return shell(`
-    <div class="brand">Family money · look only</div>
+    <div class="brand">Family money</div>
     <h1>Hi ${esc(kid.name)}</h1>
     <p class="sub">Your jars — serious money, simple view</p>
 
     <button type="button" class="card tap" data-go="spend">
       <div class="tick spend"></div>
       <div class="jar-name">Spend</div>
-      <div class="amount">${money(kid.spend.balance)}</div>
-      <div class="blurb">${esc(kid.spend.blurb)}</div>
+      <div class="role">Piggy bank</div>
+      ${piggyAmountHtml(piggy, false)}
+      <div class="blurb">${esc(spendBlurb)}</div>
+      ${counted ? `<div class="counted-hint">${esc(counted)}</div>` : ""}
       <div class="why">Why this jar? · ${esc(kid.spend.why)}</div>
     </button>
 
     <button type="button" class="card tap" data-go="save">
       <div class="tick save"></div>
       <div class="jar-name">Save</div>
+      <div class="role">Savings account</div>
       <div class="amount">${money(s.balance)}</div>
       <div class="blurb">${esc(s.blurbHome)}</div>
-      ${goalBar(s)}
       <div class="why">Why this jar? · ${esc(s.why)}</div>
     </button>
 
     <button type="button" class="card tap" data-go="grow">
       <div class="tick grow"></div>
       <div class="jar-name">Grow</div>
-      <div class="progress-label">${esc(g.label)}</div>
-      ${progressTrack(g.pathPct, "")}
-      <div class="milestone-row">${ringsHtml(g.rings, true)}</div>
-      <div class="progress-sub">${esc(g.sub)}</div>
+      <div class="progress-label">College path</div>
+      ${progressTrack(g.college.pct, "college", "College path")}
+      <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
+      <div class="jar-split">
+        <div class="progress-label">Invested / Growing</div>
+        <div class="amount mid">${money(g.brokerage.balance)}</div>
+        <div class="blurb">${esc(g.brokerage.blurb)}</div>
+      </div>
       <div class="why">Why this jar? · ${esc(g.why)}</div>
     </button>
 
     <div class="footer-note">
-      <p>Ask a grown-up to move money</p>
-      <p>Balances from September 28</p>
+      <p>Your piggy count stays on this iPad</p>
+      <p>Savings and invested amounts from September 28</p>
     </div>
   `);
 }
 
 function renderSpend(kid) {
-  const whyOn = state.panel === "why";
+  const piggy = kid.piggy;
+  const counted = piggy && piggy.countedAt ? countedOn(piggy.countedAt) : "";
+  const error = state.piggyError
+    ? `<p class="piggy-error" role="alert">${esc(state.piggyError)}</p>`
+    : "";
   return shell(`
     <div class="top-row">
       <button type="button" class="back" data-back="home">← Back</button>
@@ -131,26 +212,46 @@ function renderSpend(kid) {
     </div>
     <div class="tick spend"></div>
     <div class="jar-name" style="margin-top:6px">Spend</div>
-    <div class="amount lg">${money(kid.spend.balance)}</div>
-    <p class="sub" style="margin-bottom:12px">${esc(kid.spend.blurb)}</p>
+    <div class="role">Piggy bank</div>
+    ${piggyAmountHtml(piggy, true)}
+    <p class="sub" style="margin-bottom:12px">${esc(piggy ? kid.spend.blurb : kid.spend.emptyHint)}</p>
+    ${counted ? `<p class="counted-hint counted-block">${esc(counted)}</p>` : ""}
+
+    <div class="card piggy-card">
+      <form data-piggy-form novalidate>
+        <label class="piggy-label" for="piggy-amount">${esc(kid.spend.prompt)}</label>
+        <p class="blurb">Count the cash, then update the total.</p>
+        <div class="money-field">
+          <span aria-hidden="true">$</span>
+          <input
+            id="piggy-amount"
+            data-piggy-input
+            type="text"
+            inputmode="decimal"
+            enterkeyhint="done"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="0.00"
+            aria-describedby="piggy-help"
+            value="${esc(state.piggyDraft)}"
+          />
+        </div>
+        ${error}
+        <button type="submit" class="piggy-save">Update my count</button>
+        <p class="counted-hint piggy-help" id="piggy-help">Your count stays on this iPad.</p>
+      </form>
+    </div>
 
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(kid.spend.tip)}</span></p>
     </div>
 
-    <div class="chips" style="margin-bottom:8px">
-      <button type="button" class="chip soft ${whyOn ? "on" : ""}" data-panel="why">Why this jar?</button>
-      <button type="button" class="chip soft ${!whyOn ? "on" : ""}" data-panel="month">This month</button>
+    <div class="card soft">
+      <p class="blurb" style="color:#141416;margin-bottom:6px">${esc(kid.spend.whyBody[0])}</p>
+      <p class="blurb">${esc(kid.spend.whyBody[1])}</p>
     </div>
-
-    ${
-      whyOn
-        ? `<div class="card soft">
-            <p class="blurb" style="color:#141416;margin-bottom:6px">${esc(kid.spend.whyBody[0])}</p>
-            <p class="blurb">${esc(kid.spend.whyBody[1])}</p>
-          </div>`
-        : monthPanel(kid.spend)
-    }
   `);
 }
 
@@ -164,9 +265,9 @@ function renderSave(kid) {
     </div>
     <div class="tick save"></div>
     <div class="jar-name" style="margin-top:6px">Save</div>
+    <div class="role">Savings account</div>
     <div class="amount lg">${money(s.balance)}</div>
     <p class="sub" style="margin-bottom:12px">${esc(s.blurbDetail)}</p>
-    ${goalBar(s, "margin-bottom:16px")}
 
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(s.tip)}</span></p>
@@ -191,12 +292,13 @@ function renderSave(kid) {
 function renderGrow(kid) {
   const g = kid.grow;
   const whyOn = state.panel === "why";
+  const why = Array.isArray(g.whyBody) ? g.whyBody : [];
   return shell(`
     <button type="button" class="back" data-back="home">← Back</button>
     <div class="tick grow"></div>
     <div class="jar-name" style="margin-top:6px">Grow</div>
-    <h1 style="font-size:32px;margin-bottom:8px">On the way</h1>
-    <p class="sub">Planted for years. You look — grown-ups plant.</p>
+    <h1 style="font-size:32px;margin-bottom:8px">On track</h1>
+    <p class="sub">Planted for years. You look — grown-ups help.</p>
 
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(g.tip)}</span></p>
@@ -209,8 +311,8 @@ function renderGrow(kid) {
     ${
       whyOn
         ? `<div class="card soft" style="margin-bottom:14px">
-            <p class="blurb" style="color:#141416;margin-bottom:6px">This jar is planted for years, not today.</p>
-            <p class="blurb">You watch the path. Grown-ups take care of planting.</p>
+            <p class="blurb" style="color:#141416;margin-bottom:6px">${esc(why[0] || "")}</p>
+            <p class="blurb">${esc(why[1] || "")}</p>
           </div>`
         : ""
     }
@@ -218,19 +320,18 @@ function renderGrow(kid) {
     <div class="section-label">Inside this jar</div>
 
     <div class="card">
-      <div class="progress-label">For college</div>
+      <div class="progress-label">College path</div>
       <div class="progress-sub">${esc(g.college.sub)}</div>
-      ${progressTrack(g.college.pct, "college")}
+      ${progressTrack(g.college.pct, "college", "College path")}
       <div class="milestone-row">${ringsHtml(g.college.rings)}</div>
       <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
+      <p class="blurb" style="margin-top:8px">You see how far the path has come. Grown-ups help with this long grow.</p>
     </div>
 
     <div class="card">
-      <div class="progress-label">For later</div>
-      <div class="progress-sub">${esc(g.later.sub)}</div>
-      ${progressTrack(g.later.pct, "later")}
-      <div class="milestone-row">${ringsHtml(g.later.rings)}</div>
-      <div class="progress-sub">${esc(g.later.path)}</div>
+      <div class="progress-label">Invested / Growing</div>
+      <div class="amount mid">${money(g.brokerage.balance)}</div>
+      <div class="blurb">${esc(g.brokerage.blurb)}</div>
     </div>
   `);
 }
@@ -292,6 +393,7 @@ function renderMonth(kid) {
 }
 
 function render(kid) {
+  kid.piggy = readPiggy(kid);
   const root = $("#app");
   if (state.screen === "home") root.innerHTML = renderHome(kid);
   else if (state.screen === "spend") root.innerHTML = renderSpend(kid);
@@ -302,12 +404,21 @@ function render(kid) {
   bind(kid);
 }
 
+function openScreen(kid, screen) {
+  if (screen === "spend" && state.screen !== "spend") {
+    const saved = readPiggy(kid);
+    state.piggyDraft = saved ? saved.amount.toFixed(2) : "";
+    state.piggyError = "";
+  }
+  state.screen = screen;
+  state.panel = "why";
+  render(kid);
+}
+
 function bind(kid) {
   document.querySelectorAll("[data-go]").forEach((el) => {
     el.addEventListener("click", () => {
-      state.screen = el.getAttribute("data-go");
-      state.panel = "why";
-      render(kid);
+      openScreen(kid, el.getAttribute("data-go"));
     });
   });
   document.querySelectorAll("[data-back]").forEach((el) => {
@@ -328,6 +439,39 @@ function bind(kid) {
       state.screen = "month";
       render(kid);
     });
+  });
+
+  const form = document.querySelector("[data-piggy-form]");
+  if (!form) return;
+  const input = form.querySelector("[data-piggy-input]");
+  input.addEventListener("input", () => {
+    state.piggyDraft = input.value;
+    if (!state.piggyError) return;
+    state.piggyError = "";
+    const alert = form.querySelector("[role='alert']");
+    if (alert) alert.remove();
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.piggyDraft = input.value;
+    const parsed = parsePiggy(input.value);
+    if (parsed.error) {
+      state.piggyError = parsed.error;
+      render(kid);
+      const again = document.querySelector("[data-piggy-input]");
+      if (again) again.focus();
+      return;
+    }
+    const saved = writePiggy(kid, parsed.amount);
+    if (!saved) {
+      state.piggyError = "Couldn’t save that count on this iPad. Try again.";
+      render(kid);
+      return;
+    }
+    state.piggyDraft = saved.amount.toFixed(2);
+    state.piggyError = "";
+    render(kid);
+    window.scrollTo(0, 0);
   });
 }
 

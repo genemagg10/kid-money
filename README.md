@@ -1,8 +1,8 @@
 # Family Money
 
-Look-only jars for Ella and Luca. Each child has a separate page, so one bookmark cannot open the other child’s jars.
+Jars for Ella and Luca. Each child has a separate page, so one bookmark cannot open the other child’s jars.
 
-Spend and Save show Monarch balances as of September 28, 2026. Grow shows progress only — college is about 43% of the way, and later stays a path with no dollar total. Tips stay on each jar. Nothing here moves money.
+Spend is the piggy bank (cash at home). Each child counts it and updates the total on their own page. That count stays in the browser for that child only — Ella and Luca do not share it, and it does not sync to another iPad. Save is the savings account (Wells Fargo, from Monarch on September 28, 2026): Ella $2,227.86, Luca $2,257.12. Grow is long-term: the college path at about 43% (no college dollar total) plus invested brokerage dollars (Schwab, same day): Ella $3,151.37, Luca $3,268.61. Tips stay on each jar. Nothing here moves money.
 
 ## iPad bookmarks
 
