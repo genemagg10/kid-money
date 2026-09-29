@@ -13,12 +13,15 @@ Site files are on `main` at the repository root (`.nojekyll`, so Pages serves th
 
 ## Curriculum
 
+Jar map, in this order: **Spend** is the editable piggy plus money owed. **Save** is the Wells Fargo savings balance, read-only. **Grow** is the college path (no dollar total), the retirement path (no dollar total; Roth IRA now, 401(k) later), and brokerage dollars. See `docs/curriculum.md`.
+
 Warren’s Phase 1 lessons (L1–L6) show up in the kid pages, one idea at a time.
 
 - **Home** — “Your money has jobs.” Each jar’s Why line is that job: use soon, wait on purpose, grow for a long time. A Learn card shows the current lesson and gentle progress, such as 2 of 6.
 - **Learn** — L1 Three jars, L2 Your dashboard, L3 This month, L4 Save vs Spend, L5 Grow for later, L6 Privacy. “I got it” unlocks the next lesson. Continue moves on. Ask a grown-up saves an optional note.
-- **Spend** — Counting the piggy and the brown/blue slider are the Save vs Spend activity.
-- **Save** — Tip, Why, and This month, plus “Name one thing you’re waiting for.”
-- **Grow** — College path and retirement path, with no dollar totals on those paths. Roth IRA and 401(k) are named only in the retirement tip. The activity is to say what each path is for.
+- **Spend** — Counting the piggy and the brown/blue slider are the Save vs Spend activity. Money owed stays on this jar.
+- **Save** — Tip, Why, and This month, plus “Name one thing you’re waiting for.” The savings number does not change from this page.
+- **Grow** — College path and retirement path, with no dollar totals on those paths. Roth IRA and 401(k) are named only in the retirement tip. The activity is to say what each path is for. Brokerage dollars stay on Invested / Growing.
+- **Parent** — A quiet control on Home, behind a 4-digit code stored only on that iPad (`family-money-parent`). It can mark the next lesson done and save a note. It is not on the lesson cards, and it does not move money.
 
 Progress stays in this browser only, one child per key: `family-money-learn:ella` and `family-money-learn:luca` (`done`, `notes`, `waitingFor`). Piggy counts, the slider split, and money owed stay on their own keys.

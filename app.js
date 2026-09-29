@@ -1,6 +1,7 @@
 /* One child per page. Account balances come only from #kid-data.
    Piggy counts, the spend/save split, and money owed are saved on this device, one key per child.
    Lesson progress, grown-up notes, and the Save “waiting for” line use family-money-learn:<child>.
+   The parent corner code for this iPad uses family-money-parent. It is not a bank login.
    The split and anything owed do not change the savings-account balance. */
 
 const state = {
@@ -23,6 +24,12 @@ const state = {
   waitFlash: "",
   keepScroll: false,
   scrollTop: false,
+  parentStep: "",
+  parentEntry: "",
+  parentFirst: "",
+  parentError: "",
+  parentNote: "",
+  parentNoteFlash: "",
 };
 
 const LESSONS = [
@@ -646,6 +653,7 @@ function renderHome(kid) {
     <div class="footer-note">
       <p>Your piggy count stays on this iPad</p>
       <p>Savings and invested amounts from September 28</p>
+      <button type="button" class="parent-entry" data-go="parent">Parent</button>
     </div>
   `);
 }
@@ -1094,6 +1102,189 @@ function renderLearn(kid) {
   `);
 }
 
+function parentKey() {
+  return "family-money-parent";
+}
+
+function readParentCode() {
+  try {
+    const raw = localStorage.getItem(parentKey());
+    if (!raw) return "";
+    const data = JSON.parse(raw);
+    if (data && typeof data.code === "string" && /^\d{4}$/.test(data.code)) return data.code;
+  } catch (err) {
+    return "";
+  }
+  return "";
+}
+
+function writeParentCode(code) {
+  try {
+    localStorage.setItem(parentKey(), JSON.stringify({ code: code }));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function focusParent() {
+  const input = document.querySelector("[data-parent-input]");
+  if (input) input.focus();
+}
+
+function renderParentGate(kid) {
+  const setting = state.parentStep === "set" || state.parentStep === "confirm";
+  const prompt = state.parentStep === "confirm"
+    ? "Enter that code again."
+    : state.parentStep === "set"
+      ? "Choose a 4-digit code for this iPad."
+      : "Enter the code for this iPad.";
+  const error = state.parentError ? `<p class="sort-note" role="alert">${esc(state.parentError)}</p>` : "";
+  return shell(`
+    <button type="button" class="back" data-back="home">← Back</button>
+    <div class="learn-kicker">Parent</div>
+    <h1>${esc(kid.name)}</h1>
+    <p class="sub">For a grown-up. This opens lesson progress only.</p>
+    <div class="card" data-parent-step="${esc(state.parentStep)}">
+      <form data-parent-form novalidate>
+        <label class="piggy-label" for="parent-code">${esc(prompt)}</label>
+        <p class="blurb">${setting ? "You will use this code the next time you open Parent on this iPad." : "Lesson progress stays on this iPad."}</p>
+        <input
+          id="parent-code"
+          class="line-input parent-code"
+          data-parent-input
+          type="text"
+          inputmode="numeric"
+          enterkeyhint="done"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          maxlength="4"
+          placeholder="4 numbers"
+          aria-label="4-digit code"
+          value="${esc(state.parentEntry)}"
+        />
+        ${error}
+        <button type="submit" class="learn-done">${state.parentStep === "enter" ? "Open" : "Continue"}</button>
+      </form>
+    </div>
+  `);
+}
+
+function renderParentOpen(kid) {
+  const progress = readLearn(kid);
+  const current = currentLesson(progress);
+  const total = LESSONS.length;
+  const doneCount = progress.done.length;
+  const width = Math.round((doneCount / total) * 100);
+  const rows = LESSONS.map((lesson) => {
+    const done = progress.done.includes(lesson.id);
+    const isCurrent = current && current.id === lesson.id;
+    const note = progress.notes[lesson.id];
+    const status = done ? "Noticed" : isCurrent ? "Next" : "Later";
+    return `<div class="parent-lesson">
+      <div>
+        <div class="role">${esc(lesson.title)}</div>
+        <p class="blurb">${esc(lesson.sub)}</p>
+        ${note ? `<p class="blurb" style="color:#141416">Note · ${esc(note)}</p>` : ""}
+      </div>
+      <div class="progress-sub">${status}</div>
+    </div>`;
+  }).join("");
+  const noteOk = state.parentNoteFlash.indexOf("Marked") === 0 || state.parentNoteFlash.indexOf("Note saved") === 0;
+  const flash = state.parentNoteFlash
+    ? `<p class="sort-note${noteOk ? " ok" : ""}">${esc(state.parentNoteFlash)}</p>`
+    : "";
+  const noteFor = current ? current.title : "";
+  const noteBlock = current
+    ? `<form data-parent-note-form novalidate>
+        <label class="blurb" for="parent-note" style="color:#141416">Note on ${esc(noteFor)}</label>
+        <input id="parent-note" class="line-input" data-parent-note type="text" maxlength="120" autocomplete="off" value="${esc(state.parentNote)}" />
+        ${flash}
+        <button type="submit" class="learn-done secondary">Save note</button>
+      </form>`
+    : `${flash}<p class="blurb">All six lessons are noticed. ${esc(kid.name)} can look at them again from Home.</p>`;
+  const mark = current
+    ? `<button type="button" class="learn-done" data-parent-done>Mark “${esc(current.title)}” done</button>`
+    : "";
+  return shell(`
+    <button type="button" class="back" data-back="home">← Back</button>
+    <div class="learn-kicker">Parent</div>
+    <h1>${esc(kid.name)}</h1>
+    <p class="sub">Mark a lesson noticed, or leave a note. ${esc(kid.name)} still sees one lesson at a time.</p>
+    <div data-parent-step="open">
+      <div class="progress-track" role="progressbar" aria-label="Lessons noticed" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${doneCount}"><div class="progress-fill" style="width:${width}%"></div></div>
+      <p class="progress-sub">Noticed ${doneCount} of ${total}</p>
+      <div class="card">${rows}</div>
+      ${mark}
+      <div class="card">${noteBlock}</div>
+      <button type="button" class="text-btn" data-parent-reset>Change code</button>
+      <p class="counted-hint">This does not change the piggy, savings, or Grow amounts.</p>
+    </div>
+  `);
+}
+
+function renderParent(kid) {
+  if (state.parentStep === "open") return renderParentOpen(kid);
+  return renderParentGate(kid);
+}
+
+function submitParentCode(kid, digits) {
+  const code = String(digits || "").replace(/\D/g, "").slice(0, 4);
+  state.parentEntry = code;
+  if (!/^\d{4}$/.test(code)) {
+    state.parentError = "Use 4 numbers.";
+    render(kid);
+    focusParent();
+    return;
+  }
+  if (state.parentStep === "set") {
+    state.parentFirst = code;
+    state.parentEntry = "";
+    state.parentStep = "confirm";
+    state.parentError = "";
+    render(kid);
+    focusParent();
+    return;
+  }
+  if (state.parentStep === "confirm") {
+    if (code !== state.parentFirst) {
+      state.parentFirst = "";
+      state.parentEntry = "";
+      state.parentStep = "set";
+      state.parentError = "Those didn’t match. Choose the code again.";
+      render(kid);
+      focusParent();
+      return;
+    }
+    if (!writeParentCode(code)) {
+      state.parentError = "Couldn’t save that code on this iPad. Try again.";
+      state.parentEntry = "";
+      render(kid);
+      focusParent();
+      return;
+    }
+    state.parentEntry = "";
+    state.parentFirst = "";
+    state.parentStep = "open";
+    state.parentError = "";
+    render(kid);
+    return;
+  }
+  if (code !== readParentCode()) {
+    state.parentEntry = "";
+    state.parentError = "Try again.";
+    render(kid);
+    focusParent();
+    return;
+  }
+  state.parentEntry = "";
+  state.parentError = "";
+  state.parentStep = "open";
+  render(kid);
+}
+
 function render(kid) {
   kid.piggy = readPiggy(kid);
   kid.owed = readOwed(kid);
@@ -1105,6 +1296,7 @@ function render(kid) {
   else if (state.screen === "grow") root.innerHTML = renderGrow(kid);
   else if (state.screen === "month") root.innerHTML = renderMonth(kid);
   else if (state.screen === "learn") root.innerHTML = renderLearn(kid);
+  else if (state.screen === "parent") root.innerHTML = renderParent(kid);
   else root.innerHTML = renderHome(kid);
   bind(kid);
   if (state.keepScroll) {
@@ -1131,10 +1323,21 @@ function openScreen(kid, screen, panel) {
     state.waitFlash = "";
   }
   if (screen === "learn") focusLesson(kid, "");
+  if (screen === "parent") {
+    state.parentEntry = "";
+    state.parentFirst = "";
+    state.parentError = "";
+    state.parentNoteFlash = "";
+    state.parentStep = readParentCode() ? "enter" : "set";
+    const progress = readLearn(kid);
+    const current = currentLesson(progress);
+    state.parentNote = current && progress.notes[current.id] ? progress.notes[current.id] : "";
+  }
   state.screen = screen;
   state.panel = panel || "why";
   state.scrollTop = true;
   render(kid);
+  if (screen === "parent" && state.parentStep !== "open") focusParent();
 }
 
 function captureDrafts() {
@@ -1159,6 +1362,13 @@ function bind(kid) {
     el.addEventListener("click", () => {
       const dest = el.getAttribute("data-back");
       if (dest !== "learn") state.justDoneId = "";
+      if (dest === "home") {
+        state.parentStep = "";
+        state.parentEntry = "";
+        state.parentFirst = "";
+        state.parentError = "";
+        state.parentNoteFlash = "";
+      }
       state.screen = dest;
       state.scrollTop = true;
       render(kid);
@@ -1331,6 +1541,84 @@ function bind(kid) {
       render(kid);
     });
   }
+
+  const parentForm = document.querySelector("[data-parent-form]");
+  if (parentForm) {
+    const parentInput = parentForm.querySelector("[data-parent-input]");
+    parentInput.addEventListener("input", () => {
+      const digits = parentInput.value.replace(/\D/g, "").slice(0, 4);
+      parentInput.value = digits;
+      state.parentEntry = digits;
+      if (state.parentError) state.parentError = "";
+      if (digits.length === 4) submitParentCode(kid, digits);
+    });
+    parentForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitParentCode(kid, parentInput.value);
+    });
+  }
+  document.querySelectorAll("[data-parent-done]").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (state.parentStep !== "open") return;
+      const progress = readLearn(kid);
+      const current = currentLesson(progress);
+      if (!current) return;
+      const noteInput = document.querySelector("[data-parent-note]");
+      const typed = (noteInput ? noteInput.value : state.parentNote).trim().slice(0, 120);
+      if (typed) progress.notes[current.id] = typed;
+      progress.done = progress.done.concat([current.id]);
+      const saved = writeLearn(kid, progress);
+      if (!saved) {
+        state.parentNote = typed;
+        state.parentNoteFlash = "Couldn’t save that on this iPad. Try again.";
+        render(kid);
+        return;
+      }
+      const next = currentLesson(saved);
+      state.parentNote = next && saved.notes[next.id] ? saved.notes[next.id] : "";
+      state.parentNoteFlash = "Marked done.";
+      state.scrollTop = true;
+      render(kid);
+    });
+  });
+  const parentNoteForm = document.querySelector("[data-parent-note-form]");
+  if (parentNoteForm) {
+    const noteInput = parentNoteForm.querySelector("[data-parent-note]");
+    noteInput.addEventListener("input", () => {
+      state.parentNote = noteInput.value;
+    });
+    parentNoteForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (state.parentStep !== "open") return;
+      const progress = readLearn(kid);
+      const current = currentLesson(progress);
+      if (!current) return;
+      const text = noteInput.value.trim().slice(0, 120);
+      if (!text) {
+        state.parentNoteFlash = "Type a note, or skip it.";
+        render(kid);
+        return;
+      }
+      progress.notes[current.id] = text;
+      const saved = writeLearn(kid, progress);
+      state.parentNote = text;
+      state.parentNoteFlash = saved
+        ? "Note saved on this iPad."
+        : "Couldn’t save that on this iPad. Try again.";
+      render(kid);
+    });
+  }
+  document.querySelectorAll("[data-parent-reset]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.parentStep = "set";
+      state.parentFirst = "";
+      state.parentEntry = "";
+      state.parentError = "";
+      state.parentNoteFlash = "";
+      render(kid);
+      focusParent();
+    });
+  });
 
   const form = document.querySelector("[data-piggy-form]");
   if (!form) return;
