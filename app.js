@@ -298,10 +298,10 @@ function renderSplitCard(piggy) {
       <p class="blurb" style="color:#141416">When your count is more than zero, you can slide to let some wait.</p>
     </div>`;
   }
-  const spendPct = ((split.spendCents / split.totalCents) * 100).toFixed(4);
+  const splitRatio = split.totalCents === 0 ? 1 : split.spendCents / split.totalCents;
   return `<div class="card split-card" data-split-card data-total-cents="${split.totalCents}">
     <label class="piggy-label" for="piggy-split">Use soon, or let some wait?</label>
-    <p class="blurb">Slide toward Let it wait to set some aside. Brown is ready to use. Blue can wait. Waiting is a choice, not a punishment.</p>
+    <p class="blurb">Drag the line. Brown is ready to use. Blue can wait. Waiting is a choice, not a punishment.</p>
     <div class="split-readout">
       <div class="split-side">
         <div class="jar-name">Spend</div>
@@ -314,10 +314,10 @@ function renderSplitCard(piggy) {
         <div class="blurb">Can wait</div>
       </div>
     </div>
-    <div class="split-slider">
+    <div class="split-slider" style="--split:${splitRatio}">
       <div class="split-gauge" aria-hidden="true">
-        <div class="split-gauge-spend" data-gauge-spend style="width:${spendPct}%"></div>
-        <div class="split-gauge-save" data-gauge-save style="width:${(100 - Number(spendPct)).toFixed(4)}%"></div>
+        <div class="split-gauge-spend" data-gauge-spend></div>
+        <div class="split-gauge-save" data-gauge-save></div>
       </div>
       <input
         id="piggy-split"
@@ -327,12 +327,13 @@ function renderSplitCard(piggy) {
         min="0"
         max="${split.totalCents}"
         step="1"
-        value="${split.saveCents}"
+        value="${split.spendCents}"
         aria-valuemin="0"
-        aria-valuemax="${split.total}"
-        aria-valuenow="${split.save}"
-        aria-valuetext="Save ${money(split.save)}, Spend ${money(split.spend)}"
+        aria-valuemax="${split.totalCents}"
+        aria-valuenow="${split.spendCents}"
+        aria-valuetext="Spend ${money(split.spend)}, Save ${money(split.save)}"
       />
+      <div class="split-knob" aria-hidden="true"></div>
     </div>
     <div class="split-ends">
       <span>Use soon</span>
@@ -751,8 +752,8 @@ function bind(kid) {
   if (card) {
   const range = card.querySelector("[data-split-range]");
   const totalCents = Number(card.getAttribute("data-total-cents"));
-  const paintSplit = (saveCents, persist) => {
-    const spendCents = totalCents - saveCents;
+  const paintSplit = (spendCents, persist) => {
+    const saveCents = totalCents - spendCents;
     const spend = fromCents(spendCents);
     const save = fromCents(saveCents);
     const total = fromCents(totalCents);
@@ -768,15 +769,13 @@ function bind(kid) {
     });
     const mood = card.querySelector("[data-split-mood]");
     if (mood) mood.textContent = splitMood({ totalCents, saveCents, spendCents });
-    const spendPct = totalCents === 0 ? 100 : (spendCents / totalCents) * 100;
-    const spendBar = card.querySelector("[data-gauge-spend]");
-    const saveBar = card.querySelector("[data-gauge-save]");
-    if (spendBar) spendBar.style.width = spendPct + "%";
-    if (saveBar) saveBar.style.width = (100 - spendPct) + "%";
+    const ratio = totalCents === 0 ? 1 : spendCents / totalCents;
+    const slider = card.querySelector(".split-slider");
+    if (slider) slider.style.setProperty("--split", String(ratio));
     const readyEl = document.querySelector("[data-owed-ready]");
     if (readyEl) readyEl.textContent = readyText(spendCents, kid.owed ? kid.owed.amount : 0);
-    range.setAttribute("aria-valuenow", String(save));
-    range.setAttribute("aria-valuetext", "Save " + money(save) + ", Spend " + money(spend));
+    range.setAttribute("aria-valuenow", String(spendCents));
+    range.setAttribute("aria-valuetext", "Spend " + money(spend) + ", Save " + money(save));
     if (!persist) return;
     const stored = writeSplit(kid, save);
     if (stored) kid.piggy = stored;

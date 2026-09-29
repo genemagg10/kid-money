@@ -138,15 +138,27 @@ h1 {
 .split-amt.spend { color: #B86B3F; }
 .split-amt.save { color: #4F7199; }
 .split-slider {
+  --thumb: 48px;
+  --split: 1;
   position: relative; height: 56px; display: flex; align-items: center; margin: 4px 0 0;
 }
 .split-gauge {
   position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
   height: 22px; border-radius: 999px; overflow: hidden; display: flex; pointer-events: none;
 }
-.split-gauge-spend, .split-gauge-save { flex: none; height: 100%; }
-.split-gauge-spend { background: #B86B3F; }
-.split-gauge-save { background: #4F7199; }
+.split-gauge-spend {
+  flex: none; height: 100%; background: #B86B3F;
+  width: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--split));
+}
+.split-gauge-save { flex: 1 1 auto; height: 100%; background: #4F7199; }
+.split-knob {
+  position: absolute; z-index: 2; pointer-events: none;
+  width: var(--thumb); height: var(--thumb);
+  left: calc((100% - var(--thumb)) * var(--split));
+  top: 50%; transform: translateY(-50%);
+  border-radius: 50%; background: #fff; border: 3px solid #141416;
+  box-shadow: 0 2px 8px rgba(20, 20, 22, 0.18);
+}
 .split-range {
   -webkit-appearance: none; appearance: none;
   position: relative; z-index: 1;
@@ -161,16 +173,14 @@ h1 {
 .split-range::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 48px; height: 48px; margin-top: -13px; border-radius: 50%;
-  background: #fff; border: 3px solid #141416;
-  box-shadow: 0 2px 8px rgba(20, 20, 22, 0.18); cursor: grab;
+  background: transparent; border: none; box-shadow: none; cursor: grab;
 }
 .split-range::-moz-range-track {
   height: 22px; background: transparent; border: none;
 }
 .split-range::-moz-range-thumb {
   width: 48px; height: 48px; border-radius: 50%;
-  background: #fff; border: 3px solid #141416;
-  box-shadow: 0 2px 8px rgba(20, 20, 22, 0.18); cursor: grab;
+  background: transparent; border: none; box-shadow: none; cursor: grab;
 }
 .owed-ask { margin-top: 12px; }
 .owed-field span { color: #6E6E73; }
