@@ -435,6 +435,11 @@ function renderHome(kid) {
       ${progressTrack(g.college.pct, "college", "College path")}
       <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
       <div class="jar-split">
+        <div class="progress-label">Retirement path</div>
+        <div class="grow-state">${esc(g.retirement.state)}</div>
+        <div class="blurb">${esc(g.retirement.home)}</div>
+      </div>
+      <div class="jar-split">
         <div class="progress-label">Invested / Growing</div>
         <div class="amount mid">${money(g.brokerage.balance)}</div>
         <div class="blurb">${esc(g.brokerage.blurb)}</div>
@@ -554,7 +559,7 @@ function renderGrow(kid) {
     <div class="tick grow"></div>
     <div class="jar-name" style="margin-top:6px">Grow</div>
     <h1 style="font-size:32px;margin-bottom:8px">On track</h1>
-    <p class="sub">Planted for years. You look — grown-ups help.</p>
+    <p class="sub">College and retirement grow for years. You look — grown-ups help.</p>
 
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(g.tip)}</span></p>
@@ -582,6 +587,13 @@ function renderGrow(kid) {
       <div class="milestone-row">${ringsHtml(g.college.rings)}</div>
       <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
       <p class="blurb" style="margin-top:8px">You see how far the path has come. Grown-ups help with this long grow.</p>
+    </div>
+
+    <div class="card">
+      <div class="progress-label">${esc(g.retirement.label)}</div>
+      <div class="progress-sub">${esc(g.retirement.sub)}</div>
+      <div class="grow-state">${esc(g.retirement.state)}</div>
+      <p class="blurb" style="margin-top:8px">${esc(g.retirement.blurb)}</p>
     </div>
 
     <div class="card">
