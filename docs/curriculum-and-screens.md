@@ -59,6 +59,24 @@ Hand keys: same UI becomes their ownership checklist before funded accounts tran
 
 ---
 
+## Reading shelf (Gene's picks, added 2026-09-30)
+Two books Gene has read and likes. Neither is for the 8–10 dashboard; they come in when the ideas match the phase.
+
+**I Will Teach You to Be Rich — Ramit Sethi** (the practical system)
+- **Phase 2 (~11–13), parent-told:** "Spend a lot on what you love, cut back on what you don't." Ties straight to the Spend jar and piggy slider: choosing on purpose, no guilt.
+- **Phase 3 (~14–17), kid reads chapters:** automate savings, the four buckets of a conscious spending plan (fixed costs, investing, saving goals, guilt-free spending), and Roth IRA / 401(k) / index funds by real names. Fits the age-21 roadmap screen.
+- **Phase 4 (~18–21), full read before getting the keys:** they set up their own automation and spending plan before the funded accounts are handed over.
+
+**How to Be Rich — J. Paul Getty** (the owner mindset)
+- **Phase 3 (~16–17), selected chapters with a parent:** thinking like an owner, not just an earner; that wealth is about building and stewarding, not showing off.
+- **Phase 4 (~18–21), full read plus one family talk:** what it means to be responsible for money that was set aside for you.
+
+**Parent shelf now:** Ramit's conscious spending plan is the same idea as our $400 weekly dining-and-fun pot and the $15k/month target: spend freely inside the guilt-free bucket, automate the rest. Good to reread as the kids' lessons get deeper.
+
+Order: Ramit before Getty. Practical habits first, then the mindset once they own real accounts.
+
+---
+
 ## Data rules (parent)
 - Never show household net worth, vacation fund, or siblings’ totals.
 - 529 + kids Roth + kids brokerage + kids savings only.
