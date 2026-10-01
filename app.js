@@ -1,5 +1,7 @@
 /* One child per page. Account balances come only from #kid-data.
    Piggy counts, the spend/save split, and money owed are saved on this device, one key per child.
+   Lesson progress, grown-up notes, and the Save “waiting for” line use family-money-learn:<child>.
+   The parent corner code for this iPad uses family-money-parent. It is not a bank login.
    The split and anything owed do not change the savings-account balance. */
 
 const state = {
@@ -10,7 +12,131 @@ const state = {
   piggyError: "",
   owedDraft: "",
   owedError: "",
+  learnReview: "",
+  justDoneId: "",
+  sortIndex: 0,
+  sortNote: "",
+  noticed: {},
+  askOpen: false,
+  askDraft: "",
+  askFlash: "",
+  waitDraft: "",
+  waitFlash: "",
+  keepScroll: false,
+  scrollTop: false,
+  parentStep: "",
+  parentEntry: "",
+  parentFirst: "",
+  parentError: "",
+  parentNote: "",
+  parentNoteFlash: "",
+  monthPick: "",
+  pathPick: "",
+  privacyOn: false,
 };
+
+const LESSONS = [
+  {
+    id: "l1",
+    title: "Three jars",
+    sub: "Spend, Save, and Grow",
+    home: "Spend uses soon. Save waits. Grow works for a long time.",
+    example: "Ice cream, a bike, and school later",
+    body: [
+      "Your money has three jobs.",
+      "Spend can be ice cream after soccer. Save can be waiting for a bike. Grow can be money growing while you’re still in school.",
+    ],
+    activity: "sort",
+  },
+  {
+    id: "l2",
+    title: "Your dashboard",
+    sub: "Find your name and each jar",
+    home: "Find your name, then each jar’s job.",
+    example: "Your name, then ice cream, a bike, and school later",
+    body: [
+      "This page is yours, {name}. Your name is at the top.",
+      "Spend shows cash you counted — picture ice cream after soccer. Save shows the number that waits — picture a bike. Grow shows a college path and a retirement path, not dollar totals for those.",
+    ],
+    activity: "notice",
+  },
+  {
+    id: "l3",
+    title: "This month",
+    sub: "Notice what changed, or what didn’t",
+    home: "Notice what came in, or what stayed the same.",
+    example: "A birthday gift, or a quiet week",
+    body: [
+      "Sometimes money comes in — a birthday gift, or money for helping at home. Sometimes it is a quiet week and the number stays the same.",
+      "Noticing is the win. A bigger number is not better, and staying the same still counts.",
+    ],
+    activity: "month",
+  },
+  {
+    id: "l4",
+    title: "Save vs Spend",
+    sub: "Ready now, or wait",
+    home: "Use the piggy slider: ready now, or wait.",
+    example: "Ice cream now, or part of a bike",
+    body: [
+      "Your piggy is cash at home. Some can be ready now, like ice cream after soccer. Some can wait, like part of a bike.",
+      "Waiting is a choice, not a punishment. The slider does not change your savings account.",
+    ],
+    activity: "slider",
+  },
+  {
+    id: "l5",
+    title: "Grow for later",
+    sub: "College path and retirement path",
+    home: "Point to the college path and the retirement path.",
+    example: "School later. A job someday.",
+    body: [
+      "College path is money growing while you’re still in school. Filling it is not only your job — grown-ups help.",
+      "Retirement path is money that waits until you’re a grown-up with a job. You see the path, not a dollar total.",
+    ],
+    activity: "paths",
+  },
+  {
+    id: "l6",
+    title: "Your jars stay yours",
+    sub: "Not a contest",
+    home: "We don’t compare jars as a contest.",
+    example: "No contest about ice-cream money",
+    body: [
+      "We don’t line up ice-cream money, or bike money, to see who has more — not with friends, and not at home.",
+      "This page is only yours. Knowing what each jar is for matters. A contest does not.",
+    ],
+    activity: "privacy",
+  },
+];
+
+const SORTS = [
+  {
+    prompt: "Ice cream after soccer",
+    detail: "A pretend dollar you might use soon.",
+    answer: "spend",
+    yes: "Spend is for soon.",
+  },
+  {
+    prompt: "Waiting for a bike",
+    detail: "A pretend dollar that waits on purpose.",
+    answer: "save",
+    yes: "Save’s job is to wait.",
+  },
+  {
+    prompt: "Growing while you’re in school",
+    detail: "A pretend dollar for a long time. Grown-ups help.",
+    answer: "grow",
+    yes: "Grow is the long job.",
+  },
+];
+
+const NOTICES = [
+  { id: "name", label: "My name is on this page" },
+  { id: "spend", label: "Spend — like ice cream after soccer" },
+  { id: "save", label: "Save — like waiting for a bike" },
+  { id: "grow", label: "Grow — school later, and a job someday" },
+];
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -250,7 +376,146 @@ function ringsHtml(kinds, numbered) {
 }
 
 function shell(inner) {
-  return `<div class="phone">${inner}</div>`;
+  return `<div class="phone" data-screen="${esc(state.screen)}">${inner}</div>`;
+}
+
+function learnKey(kid) {
+  return "family-money-learn:" + profileId(kid);
+}
+
+function emptyLearn() {
+  return { done: [], notes: {}, waitingFor: "" };
+}
+
+function readLearn(kid) {
+  const blank = emptyLearn();
+  try {
+    const raw = localStorage.getItem(learnKey(kid));
+    if (!raw) return blank;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return blank;
+    const incoming = Array.isArray(data.done) ? data.done.map((id) => String(id)) : [];
+    const done = [];
+    for (const lesson of LESSONS) {
+      if (incoming.includes(lesson.id)) done.push(lesson.id);
+      else break;
+    }
+    const notes = {};
+    if (data.notes && typeof data.notes === "object") {
+      for (const lesson of LESSONS) {
+        const text = data.notes[lesson.id];
+        if (typeof text !== "string") continue;
+        const clean = text.trim().slice(0, 120);
+        if (clean) notes[lesson.id] = clean;
+      }
+    }
+    let waitingFor = "";
+    if (typeof data.waitingFor === "string") waitingFor = data.waitingFor.trim().slice(0, 60);
+    return { done, notes, waitingFor };
+  } catch (err) {
+    return blank;
+  }
+}
+
+function writeLearn(kid, progress) {
+  const clean = {
+    done: progress.done,
+    notes: progress.notes || {},
+    waitingFor: progress.waitingFor || "",
+  };
+  try {
+    localStorage.setItem(learnKey(kid), JSON.stringify(clean));
+    return clean;
+  } catch (err) {
+    return null;
+  }
+}
+
+function currentLesson(progress) {
+  return LESSONS.find((lesson) => !progress.done.includes(lesson.id)) || null;
+}
+
+function lessonById(id) {
+  return LESSONS.find((lesson) => lesson.id === id) || null;
+}
+
+function viewLesson(progress) {
+  const current = currentLesson(progress);
+  if (state.learnReview) {
+    const found = lessonById(state.learnReview);
+    if (found && progress.done.includes(found.id)) {
+      return { lesson: found, reviewing: true, current };
+    }
+  }
+  if (!current) return { lesson: LESSONS[0], reviewing: true, current: null };
+  return { lesson: current, reviewing: false, current };
+}
+
+function fillName(text, kid) {
+  return String(text).replaceAll("{name}", kid.name);
+}
+
+function focusLesson(kid, reviewId) {
+  state.justDoneId = "";
+  state.learnReview = reviewId || "";
+  state.sortIndex = 0;
+  state.sortNote = "";
+  state.noticed = {};
+  state.monthPick = "";
+  state.pathPick = "";
+  state.privacyOn = false;
+  state.askOpen = false;
+  state.askFlash = "";
+  const progress = readLearn(kid);
+  const view = viewLesson(progress);
+  const id = view.lesson ? view.lesson.id : "";
+  state.askDraft = id && progress.notes[id] ? progress.notes[id] : "";
+}
+
+function jarWord(id) {
+  if (id === "spend") return "Spend";
+  if (id === "save") return "Save";
+  return "Grow";
+}
+
+function mark(kind) {
+  const paths = {
+    spend: '<circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.6 12h6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+    save: '<rect x="7" y="5" width="10" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 9h5M9.5 12.2h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+    college: '<path d="M4 16.5c2.4-3.2 4.6-4.8 8-4.8s5.6 1.6 8 4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.2" r="2" fill="currentColor"/>',
+    retire: '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8.2V12l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    notice: '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/>',
+    yours: '<circle cx="12" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.6 18.2c.8-2.5 2.7-3.8 5.4-3.8s4.6 1.3 5.4 3.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  };
+  const icon = paths[kind] || paths.notice;
+  return `<span class="mark ${esc(kind)}" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22">${icon}</svg></span>`;
+}
+
+function sceneHtml(kind, title, line) {
+  return `<div class="scene">${mark(kind)}<div><div class="scene-title">${esc(title)}</div>${line ? `<div class="blurb">${esc(line)}</div>` : ""}</div></div>`;
+}
+
+function sceneButton(kind, title, line, attrs, on) {
+  return `<button type="button" class="scene-btn${on ? " on" : ""}" ${attrs} aria-pressed="${on ? "true" : "false"}">${mark(kind)}<span><span class="scene-title">${esc(title)}</span>${line ? `<span class="blurb">${esc(line)}</span>` : ""}</span></button>`;
+}
+
+function lessonMark(id) {
+  if (id === "l1" || id === "l4") return "spend";
+  if (id === "l5") return "college";
+  if (id === "l6") return "yours";
+  return "notice";
+}
+
+function learnExamples(lesson) {
+  if (!lesson) return "";
+  if (lesson.id === "l1") {
+    return [
+      sceneHtml("spend", "Ice cream after soccer", "Use soon"),
+      sceneHtml("save", "Waiting for a bike", "Wait"),
+      sceneHtml("college", "While you’re in school", "Grow for a long time"),
+    ].join("");
+  }
+  return sceneHtml(lessonMark(lesson.id), lesson.example, "");
 }
 
 function rowsHtml(rows) {
@@ -289,29 +554,34 @@ function piggyIntentHtml(piggy) {
 function renderSplitCard(piggy) {
   if (!piggy) {
     return `<div class="card soft">
-      <p class="blurb" style="color:#141416">Update your count, then you can choose what to use soon and what can wait.</p>
+      <div class="activity-kicker">Activity · Ready now or wait</div>
+      <p class="blurb" style="color:#141416">Update your count, then slide. Brown can be ice cream after soccer. Blue can wait for a bike.</p>
     </div>`;
   }
   const split = splitOf(piggy);
   if (split.totalCents <= 0) {
     return `<div class="card soft">
-      <p class="blurb" style="color:#141416">When your count is more than zero, you can slide to let some wait.</p>
+      <div class="activity-kicker">Activity · Ready now or wait</div>
+      <p class="blurb" style="color:#141416">When your count is more than zero, slide some for later — like part of a bike.</p>
     </div>`;
   }
   const splitRatio = split.totalCents === 0 ? 1 : split.spendCents / split.totalCents;
-  return `<div class="card split-card" data-split-card data-total-cents="${split.totalCents}">
+  return `<div class="card split-card" data-split-card data-total-cents="${split.totalCents}" data-activity="l4">
+    <div class="activity-kicker">Activity · Ready now or wait</div>
     <label class="piggy-label" for="piggy-split">Use soon, or let some wait?</label>
-    <p class="blurb">Drag the line. Brown is ready to use. Blue can wait. Waiting is a choice, not a punishment.</p>
+    <p class="blurb">This is the Save vs Spend practice. Brown can be ice cream after soccer. Blue can wait for a bike. Waiting is a choice, not a punishment.</p>
     <div class="split-readout">
       <div class="split-side">
         <div class="jar-name">Spend</div>
         <div class="split-amt spend" data-split-spend>${money(split.spend)}</div>
         <div class="blurb">Ready to use</div>
+        <div class="example-tag">Ice cream after soccer</div>
       </div>
       <div class="split-side">
         <div class="jar-name">Save</div>
         <div class="split-amt save" data-split-save>${money(split.save)}</div>
         <div class="blurb">Can wait</div>
+        <div class="example-tag">Waiting for a bike</div>
       </div>
     </div>
     <div class="split-slider" style="--split:${splitRatio}">
@@ -405,7 +675,8 @@ function renderHome(kid) {
   return shell(`
     <div class="brand">Family money</div>
     <h1>Hi ${esc(kid.name)}</h1>
-    <p class="sub">Your jars — serious money, simple view</p>
+    <p class="jobs-line">Your money has jobs.</p>
+    ${learnHomeCard(kid)}
 
     <button type="button" class="card tap" data-go="spend">
       <div class="tick spend"></div>
@@ -416,6 +687,7 @@ function renderHome(kid) {
       ${owedSummaryHtml(split, kid.owed)}
       <div class="blurb">${esc(spendBlurb)}</div>
       ${counted ? `<div class="counted-hint">${esc(counted)}</div>` : ""}
+      ${sceneHtml("spend", "Ice cream after soccer", "An example of soon")}
       <div class="why">Why this jar? · ${esc(kid.spend.why)}</div>
     </button>
 
@@ -426,6 +698,7 @@ function renderHome(kid) {
       <div class="amount">${money(s.balance)}</div>
       <div class="blurb">${esc(s.blurbHome)}</div>
       ${piggyIntentHtml(piggy)}
+      ${sceneHtml("save", "Waiting for a bike", "An example of waiting")}
       <div class="why">Why this jar? · ${esc(s.why)}</div>
     </button>
 
@@ -435,10 +708,12 @@ function renderHome(kid) {
       <div class="progress-label">College path</div>
       ${progressTrack(g.college.pct, "college", "College path")}
       <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
+      ${sceneHtml("college", "While you’re in school", "Money growing while you’re still in school")}
       <div class="jar-split">
         <div class="progress-label">Retirement path</div>
         <div class="grow-state">${esc(g.retirement.state)}</div>
         <div class="blurb">${esc(g.retirement.home)}</div>
+        ${sceneHtml("retire", "A job someday", "Money that waits until you’re a grown-up with a job")}
       </div>
       <div class="jar-split">
         <div class="progress-label">Invested / Growing</div>
@@ -451,6 +726,7 @@ function renderHome(kid) {
     <div class="footer-note">
       <p>Your piggy count stays on this iPad</p>
       <p>Savings and invested amounts from September 28</p>
+      <button type="button" class="parent-entry" data-go="parent">Parent</button>
     </div>
   `);
 }
@@ -476,8 +752,9 @@ function renderSpend(kid) {
 
     <div class="card piggy-card">
       <form data-piggy-form novalidate>
+        <div class="activity-kicker">Activity · Count your piggy</div>
         <label class="piggy-label" for="piggy-amount">${esc(kid.spend.prompt)}</label>
-        <p class="blurb">Count the cash, then update the total.</p>
+        <p class="blurb">This is part of Save vs Spend. Count the cash you can use soon — picture ice cream after soccer — then update the total.</p>
         <div class="money-field">
           <span aria-hidden="true">$</span>
           <input
@@ -531,6 +808,8 @@ function renderSave(kid) {
     <p class="sub" style="margin-bottom:12px">${esc(s.blurbDetail)}</p>
     ${piggyIntentHtml(kid.piggy)}
 
+    ${renderWaitingCard(kid)}
+
     <div class="card tip">
       <p class="tip-line">Tip · <span>${esc(s.tip)}</span></p>
     </div>
@@ -566,6 +845,14 @@ function renderGrow(kid) {
       <p class="tip-line">Tip · <span>${esc(g.tip)}</span></p>
     </div>
 
+    <div class="card" data-activity="l5">
+      <div class="activity-kicker">Activity · Two paths</div>
+      <p class="blurb" style="color:#141416;margin-bottom:8px">Tap a path and say the line. No dollar totals on either one.</p>
+      ${sceneButton("college", "College path", "Money growing while you’re still in school.", 'data-path-example="college"', state.pathPick === "college")}
+      ${sceneButton("retire", "Retirement path", "Money that waits until you’re a grown-up with a job.", 'data-path-example="retire"', state.pathPick === "retire")}
+      ${state.pathPick ? `<p class="sort-note ok">That’s the one. Grown-ups help.</p>` : ""}
+    </div>
+
     <div class="chips" style="margin-bottom:8px">
       <button type="button" class="chip soft ${whyOn ? "on" : ""}" data-panel="why">Why this jar?</button>
     </div>
@@ -587,7 +874,7 @@ function renderGrow(kid) {
       ${progressTrack(g.college.pct, "college", "College path")}
       <div class="milestone-row">${ringsHtml(g.college.rings)}</div>
       <div class="progress-sub">~${Number(g.college.pct)}% · ${esc(g.college.path)}</div>
-      <p class="blurb" style="margin-top:8px">You see how far the path has come. Grown-ups help with this long grow.</p>
+      <p class="blurb" style="margin-top:8px">Money growing while you’re still in school. Grown-ups help — it is not only your job.</p>
     </div>
 
     <div class="card">
@@ -611,8 +898,8 @@ function monthPanel(jar) {
   const list = rows.length
     ? `<div class="card">${rowsHtml(rows)}</div>`
     : `<div class="card soft">
-         <p class="blurb" style="color:#141416;margin-bottom:6px">A grown-up keeps what moved this month.</p>
-         <p class="blurb">You can look at your balance. Ask before anything changes.</p>
+         <p class="blurb" style="color:#141416;margin-bottom:6px">A birthday gift came in — or it was a quiet week and this number stayed the same.</p>
+         <p class="blurb">Noticing counts. The size does not. A grown-up keeps what moved.</p>
        </div>`;
   const more = story
     ? `<button type="button" class="chip soft" data-go-month="${esc(jar.monthKey || "")}" style="width:100%;margin-top:4px">Open full month story</button>`
@@ -632,7 +919,7 @@ function renderMonth(kid) {
       <h1>This month</h1>
       <p class="sub">${esc(kid.name)} · ${esc(monthName)}</p>
       <div class="card soft">
-        <p class="blurb" style="color:#141416">A grown-up keeps what moved this month.</p>
+        <p class="blurb" style="color:#141416">Did anything come in, or did it stay the same? Noticing counts. The size does not.</p>
       </div>
     `);
   }
@@ -661,20 +948,450 @@ function renderMonth(kid) {
   `);
 }
 
+function learnHomeCard(kid) {
+  const progress = readLearn(kid);
+  const total = LESSONS.length;
+  const doneCount = progress.done.length;
+  const current = currentLesson(progress);
+  const title = current ? current.title : "You can say what each jar is for";
+  const blurb = current
+    ? current.home
+    : "Six ideas, noticed one at a time. You can look again whenever you want.";
+  const cta = current ? "Open this lesson" : "Look again";
+  const width = Math.round((doneCount / total) * 100);
+  return `<div class="card learn-card" data-learn-progress="${doneCount}">
+    <div class="learn-kicker">Learn · ${doneCount} of ${total}</div>
+    <div class="role">${esc(title)}</div>
+    <p class="blurb">${esc(blurb)}</p>
+    ${learnExamples(current)}
+    <div class="progress-track" role="progressbar" aria-label="Lessons noticed" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${doneCount}"><div class="progress-fill" style="width:${width}%"></div></div>
+    <button type="button" class="learn-done secondary" data-go="learn">${esc(cta)}</button>
+  </div>`;
+}
+
+function renderWaitingCard(kid) {
+  const flashClass = state.waitFlash.indexOf("Remembered") === 0 ? "sort-note ok" : "sort-note";
+  const flash = state.waitFlash ? `<p class="${flashClass}">${esc(state.waitFlash)}</p>` : "";
+  return `<div class="card" data-activity="save-wait">
+    <form data-wait-form novalidate>
+      <div class="activity-kicker">Activity</div>
+      <label class="piggy-label" for="waiting-for">Name one thing you’re waiting for</label>
+      ${sceneHtml("save", "Waiting for a bike", "One example. Yours can be different.")}
+      <p class="blurb">A goal, a gift, something later. Waiting is the job of this jar.</p>
+      <input
+        id="waiting-for"
+        class="line-input"
+        data-wait-input
+        type="text"
+        maxlength="60"
+        autocomplete="off"
+        enterkeyhint="done"
+        placeholder="Waiting for a bike"
+        value="${esc(state.waitDraft)}"
+      />
+      ${flash}
+      <button type="submit" class="learn-done">Remember it</button>
+      <p class="counted-hint piggy-help">Saved on this iPad only. It does not change your savings number.</p>
+    </form>
+  </div>`;
+}
+
+function sortActivityHtml() {
+  const doneRows = SORTS.slice(0, state.sortIndex)
+    .map(
+      (item) =>
+        `<div class="sort-row">${mark(item.answer)}<span class="sort-jar ${item.answer}">${jarWord(item.answer)}</span><span class="sort-copy">${esc(item.prompt)}<span class="sort-yes">${esc(item.yes)}</span></span></div>`
+    )
+    .join("");
+  const current = SORTS[state.sortIndex];
+  if (!current) {
+    return `<div class="card" data-activity="l1">
+      <div class="activity-kicker">See it · three pretend dollars</div>
+      ${doneRows}
+      <p class="sort-note ok">You can tell the three jobs apart.</p>
+    </div>`;
+  }
+  const note = state.sortNote ? `<p class="sort-note">${esc(state.sortNote)}</p>` : "";
+  return `<div class="card" data-activity="l1">
+    <div class="activity-kicker">See it · three pretend dollars</div>
+    ${doneRows}
+    <p class="blurb" style="color:#141416;margin:8px 0 4px">Which jar gets this pretend dollar?</p>
+    <p class="pretend">Pretend $1</p>
+    <p class="role">${esc(current.prompt)}</p>
+    <p class="blurb">${esc(current.detail)}</p>
+    <div class="chips" role="group" aria-label="Which jar">
+      <button type="button" class="chip" data-sort="spend">Spend</button>
+      <button type="button" class="chip" data-sort="save">Save</button>
+      <button type="button" class="chip" data-sort="grow">Grow</button>
+    </div>
+    ${note}
+  </div>`;
+}
+
+function noticeActivityHtml() {
+  const buttons = NOTICES.map((item) => {
+    const on = state.noticed[item.id] ? " on" : "";
+    const pressed = state.noticed[item.id] ? "true" : "false";
+    return `<button type="button" class="chip block${on}" data-notice="${item.id}" aria-pressed="${pressed}">${esc(item.label)}</button>`;
+  }).join("");
+  return `<div class="card" data-activity="l2">
+    <div class="activity-kicker">Activity · Find these</div>
+    <p class="blurb" style="color:#141416;margin-bottom:10px">Tap each one when you can point to it on your home screen.</p>
+    <div class="notice-list">${buttons}</div>
+  </div>`;
+}
+
+function linkActivity(kicker, body, label, screen, panel) {
+  const panelAttr = panel ? ` data-open-panel="${esc(panel)}"` : "";
+  return `<div class="card">
+    <div class="activity-kicker">${esc(kicker)}</div>
+    <p class="blurb" style="color:#141416;margin-bottom:12px">${esc(body)}</p>
+    <button type="button" class="learn-done secondary" data-go="${esc(screen)}"${panelAttr}>${esc(label)}</button>
+  </div>`;
+}
+
+function activityHtml(lesson) {
+  if (lesson.activity === "sort") return sortActivityHtml();
+  if (lesson.activity === "notice") return noticeActivityHtml();
+  if (lesson.activity === "month") {
+    const picked = state.monthPick;
+    return `<div class="card" data-activity="l3">
+      <div class="activity-kicker">See it · notice one thing</div>
+      <p class="blurb" style="color:#141416;margin-bottom:8px">Tap the one you noticed. Either one counts.</p>
+      ${sceneButton("notice", "A birthday gift came in", "Something arrived. The size is not the point.", 'data-month-example="in"', picked === "in")}
+      ${sceneButton("notice", "A quiet week", "The number stayed the same.", 'data-month-example="same"', picked === "same")}
+      ${picked ? `<p class="sort-note ok">You noticed. That is enough.</p>` : ""}
+      <button type="button" class="learn-done secondary" data-go="save" data-open-panel="month">Open This month</button>
+    </div>`;
+  }
+  if (lesson.activity === "slider") {
+    return `<div class="card" data-activity="l4">
+      <div class="activity-kicker">See it · ready now or wait</div>
+      ${sceneHtml("spend", "Ice cream after soccer", "The brown side. Ready now.")}
+      ${sceneHtml("save", "Waiting for a bike", "The blue side. Can wait.")}
+      <button type="button" class="learn-done secondary" data-go="spend">Open the slider</button>
+    </div>`;
+  }
+  if (lesson.activity === "paths") {
+    return `<div class="card" data-activity="l5">
+      <div class="activity-kicker">See it · two paths</div>
+      <p class="blurb" style="color:#141416;margin-bottom:8px">Tap a path and say the line.</p>
+      ${sceneButton("college", "College path", "Money growing while you’re still in school.", 'data-path-example="college"', state.pathPick === "college")}
+      ${sceneButton("retire", "Retirement path", "Money that waits until you’re a grown-up with a job.", 'data-path-example="retire"', state.pathPick === "retire")}
+      ${state.pathPick ? `<p class="sort-note ok">That’s the one. Grown-ups help. No dollar total on that path.</p>` : ""}
+      <button type="button" class="learn-done secondary" data-go="grow">Open Grow</button>
+    </div>`;
+  }
+  return `<div class="card" data-activity="l6">
+    <div class="activity-kicker">See it · say it once</div>
+    ${sceneButton("yours", "My jars are mine.", "We don’t ask who has more ice-cream money.", "data-privacy", state.privacyOn)}
+    ${state.privacyOn ? `<p class="sort-note ok">That’s our rule.</p>` : ""}
+  </div>`;
+}
+
+function askBlockHtml(progress, lesson) {
+  const note = progress.notes[lesson.id] || "";
+  const askOk = state.askFlash.indexOf("Saved") === 0;
+  const flash = state.askFlash
+    ? `<p class="sort-note${askOk ? " ok" : ""}">${esc(state.askFlash)}</p>`
+    : "";
+  const saved = !state.askOpen && note
+    ? `<div class="card soft">
+        <div class="activity-kicker">Note for a grown-up</div>
+        <p class="blurb" style="color:#141416">${esc(note)}</p>
+      </div>`
+    : "";
+  const form = state.askOpen
+    ? `<div class="card">
+        <form data-ask-form novalidate>
+          <label class="blurb" for="ask-note" style="color:#141416">A note to talk about later</label>
+          <input id="ask-note" class="line-input" data-ask-input type="text" maxlength="120" autocomplete="off" enterkeyhint="done" value="${esc(state.askDraft)}" />
+          <button type="submit" class="learn-done secondary">Save note</button>
+          ${note ? `<button type="button" class="text-btn" data-ask-clear>Clear note</button>` : ""}
+          <p class="counted-hint">Optional. It stays on this iPad for a grown-up to read.</p>
+        </form>
+      </div>`
+    : "";
+  return `<div class="chips">
+      <button type="button" class="chip soft ${state.askOpen ? "on" : ""}" data-ask-toggle>Ask a grown-up</button>
+    </div>
+    ${flash}
+    ${form}
+    ${saved}`;
+}
+
+function renderJustDone(kid, progress) {
+  const lesson = lessonById(state.justDoneId) || LESSONS[0];
+  const next = currentLesson(progress);
+  const total = LESSONS.length;
+  return shell(`
+    <div class="top-row">
+      <button type="button" class="back" data-back="home">← Back</button>
+      <div class="chip on static">${esc(kid.name)}</div>
+    </div>
+    <div class="learn-kicker">Noticed</div>
+    <h1>${esc(lesson.title)}</h1>
+    <p class="sub">${progress.done.length} of ${total} lessons</p>
+    <div class="card soft">
+      <p class="blurb" style="color:#141416">You noticed this idea. That is enough for now.</p>
+    </div>
+    ${next ? `<button type="button" class="learn-done" data-learn-continue>Continue</button>` : ""}
+    <button type="button" class="learn-done ${next ? "secondary" : ""}" data-back="home">Back home</button>
+  `);
+}
+
+function renderLearn(kid) {
+  const progress = readLearn(kid);
+  if (state.justDoneId) return renderJustDone(kid, progress);
+  const view = viewLesson(progress);
+  const lesson = view.lesson;
+  const index = LESSONS.findIndex((item) => item.id === lesson.id);
+  const total = LESSONS.length;
+  const doneCount = progress.done.length;
+  const width = Math.round((doneCount / total) * 100);
+  const lines = lesson.body.map((line, i) => {
+    const style = i === 0 ? ' style="color:#141416;margin-bottom:8px"' : "";
+    return `<p class="blurb"${style}>${esc(fillName(line, kid))}</p>`;
+  }).join("");
+  const prev = index > 0 && progress.done.includes(LESSONS[index - 1].id) && !view.reviewing
+    ? LESSONS[index - 1].id
+    : "";
+  const nextDone = view.reviewing ? LESSONS[(index + 1) % total].id : "";
+  let action = `<button type="button" class="learn-done" data-got-it>I got it</button>`;
+  if (view.reviewing && view.current) {
+    action = `<button type="button" class="learn-done" data-review-current>Back to the current lesson</button>`;
+  } else if (view.reviewing) {
+    action = `<button type="button" class="learn-done" data-review="${esc(nextDone)}">Next idea</button>`;
+  }
+  const previous = prev
+    ? `<button type="button" class="text-btn" data-review="${esc(prev)}">Look at the previous idea</button>`
+    : "";
+  const kicker = view.reviewing ? "Looking again" : "Learn";
+  return shell(`
+    <div class="top-row">
+      <button type="button" class="back" data-back="home">← Back</button>
+      <div class="chip on static">${esc(kid.name)}</div>
+    </div>
+    <div class="learn-kicker">${esc(kicker)}</div>
+    <h1>${esc(lesson.title)}</h1>
+    <p class="sub">${esc(lesson.sub)}</p>
+    <div class="progress-track" role="progressbar" aria-label="Lessons noticed" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${doneCount}"><div class="progress-fill" style="width:${width}%"></div></div>
+    <p class="progress-sub">Noticed ${doneCount} of ${total}</p>
+    <div class="card" data-lesson="${esc(lesson.id)}">${lines}</div>
+    ${activityHtml(lesson)}
+    ${askBlockHtml(progress, lesson)}
+    ${action}
+    ${previous}
+  `);
+}
+
+function parentKey() {
+  return "family-money-parent";
+}
+
+function readParentCode() {
+  try {
+    const raw = localStorage.getItem(parentKey());
+    if (!raw) return "";
+    const data = JSON.parse(raw);
+    if (data && typeof data.code === "string" && /^\d{4}$/.test(data.code)) return data.code;
+  } catch (err) {
+    return "";
+  }
+  return "";
+}
+
+function writeParentCode(code) {
+  try {
+    localStorage.setItem(parentKey(), JSON.stringify({ code: code }));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function focusParent() {
+  const input = document.querySelector("[data-parent-input]");
+  if (input) input.focus();
+}
+
+function renderParentGate(kid) {
+  const setting = state.parentStep === "set" || state.parentStep === "confirm";
+  const prompt = state.parentStep === "confirm"
+    ? "Enter that code again."
+    : state.parentStep === "set"
+      ? "Choose a 4-digit code for this iPad."
+      : "Enter the code for this iPad.";
+  const error = state.parentError ? `<p class="sort-note" role="alert">${esc(state.parentError)}</p>` : "";
+  return shell(`
+    <button type="button" class="back" data-back="home">← Back</button>
+    <div class="learn-kicker">Parent</div>
+    <h1>${esc(kid.name)}</h1>
+    <p class="sub">For a grown-up. This opens lesson progress only.</p>
+    <div class="card" data-parent-step="${esc(state.parentStep)}">
+      <form data-parent-form novalidate>
+        <label class="piggy-label" for="parent-code">${esc(prompt)}</label>
+        <p class="blurb">${setting ? "You will use this code the next time you open Parent on this iPad." : "Lesson progress stays on this iPad."}</p>
+        <input
+          id="parent-code"
+          class="line-input parent-code"
+          data-parent-input
+          type="text"
+          inputmode="numeric"
+          enterkeyhint="done"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          maxlength="4"
+          placeholder="4 numbers"
+          aria-label="4-digit code"
+          value="${esc(state.parentEntry)}"
+        />
+        ${error}
+        <button type="submit" class="learn-done">${state.parentStep === "enter" ? "Open" : "Continue"}</button>
+      </form>
+    </div>
+  `);
+}
+
+function renderParentOpen(kid) {
+  const progress = readLearn(kid);
+  const current = currentLesson(progress);
+  const total = LESSONS.length;
+  const doneCount = progress.done.length;
+  const width = Math.round((doneCount / total) * 100);
+  const rows = LESSONS.map((lesson) => {
+    const done = progress.done.includes(lesson.id);
+    const isCurrent = current && current.id === lesson.id;
+    const note = progress.notes[lesson.id];
+    const status = done ? "Noticed" : isCurrent ? "Next" : "Later";
+    return `<div class="parent-lesson">
+      <div>
+        <div class="role">${esc(lesson.title)}</div>
+        <p class="blurb">${esc(lesson.sub)}</p>
+        ${note ? `<p class="blurb" style="color:#141416">Note · ${esc(note)}</p>` : ""}
+      </div>
+      <div class="progress-sub">${status}</div>
+    </div>`;
+  }).join("");
+  const noteOk = state.parentNoteFlash.indexOf("Marked") === 0 || state.parentNoteFlash.indexOf("Note saved") === 0;
+  const flash = state.parentNoteFlash
+    ? `<p class="sort-note${noteOk ? " ok" : ""}">${esc(state.parentNoteFlash)}</p>`
+    : "";
+  const noteFor = current ? current.title : "";
+  const noteBlock = current
+    ? `<form data-parent-note-form novalidate>
+        <label class="blurb" for="parent-note" style="color:#141416">Note on ${esc(noteFor)}</label>
+        <input id="parent-note" class="line-input" data-parent-note type="text" maxlength="120" autocomplete="off" value="${esc(state.parentNote)}" />
+        ${flash}
+        <button type="submit" class="learn-done secondary">Save note</button>
+      </form>`
+    : `${flash}<p class="blurb">All six lessons are noticed. ${esc(kid.name)} can look at them again from Home.</p>`;
+  const mark = current
+    ? `<button type="button" class="learn-done" data-parent-done>Mark “${esc(current.title)}” done</button>`
+    : "";
+  return shell(`
+    <button type="button" class="back" data-back="home">← Back</button>
+    <div class="learn-kicker">Parent</div>
+    <h1>${esc(kid.name)}</h1>
+    <p class="sub">Mark a lesson noticed, or leave a note. ${esc(kid.name)} still sees one lesson at a time.</p>
+    <div data-parent-step="open">
+      <div class="progress-track" role="progressbar" aria-label="Lessons noticed" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${doneCount}"><div class="progress-fill" style="width:${width}%"></div></div>
+      <p class="progress-sub">Noticed ${doneCount} of ${total}</p>
+      <div class="card">${rows}</div>
+      ${mark}
+      <div class="card">${noteBlock}</div>
+      <button type="button" class="text-btn" data-parent-reset>Change code</button>
+      <p class="counted-hint">This does not change the piggy, savings, or Grow amounts.</p>
+    </div>
+  `);
+}
+
+function renderParent(kid) {
+  if (state.parentStep === "open") return renderParentOpen(kid);
+  return renderParentGate(kid);
+}
+
+function submitParentCode(kid, digits) {
+  const code = String(digits || "").replace(/\D/g, "").slice(0, 4);
+  state.parentEntry = code;
+  if (!/^\d{4}$/.test(code)) {
+    state.parentError = "Use 4 numbers.";
+    render(kid);
+    focusParent();
+    return;
+  }
+  if (state.parentStep === "set") {
+    state.parentFirst = code;
+    state.parentEntry = "";
+    state.parentStep = "confirm";
+    state.parentError = "";
+    render(kid);
+    focusParent();
+    return;
+  }
+  if (state.parentStep === "confirm") {
+    if (code !== state.parentFirst) {
+      state.parentFirst = "";
+      state.parentEntry = "";
+      state.parentStep = "set";
+      state.parentError = "Those didn’t match. Choose the code again.";
+      render(kid);
+      focusParent();
+      return;
+    }
+    if (!writeParentCode(code)) {
+      state.parentError = "Couldn’t save that code on this iPad. Try again.";
+      state.parentEntry = "";
+      render(kid);
+      focusParent();
+      return;
+    }
+    state.parentEntry = "";
+    state.parentFirst = "";
+    state.parentStep = "open";
+    state.parentError = "";
+    render(kid);
+    return;
+  }
+  if (code !== readParentCode()) {
+    state.parentEntry = "";
+    state.parentError = "Try again.";
+    render(kid);
+    focusParent();
+    return;
+  }
+  state.parentEntry = "";
+  state.parentError = "";
+  state.parentStep = "open";
+  render(kid);
+}
+
 function render(kid) {
   kid.piggy = readPiggy(kid);
   kid.owed = readOwed(kid);
   const root = $("#app");
+  const y = state.keepScroll ? window.scrollY : 0;
   if (state.screen === "home") root.innerHTML = renderHome(kid);
   else if (state.screen === "spend") root.innerHTML = renderSpend(kid);
   else if (state.screen === "save") root.innerHTML = renderSave(kid);
   else if (state.screen === "grow") root.innerHTML = renderGrow(kid);
   else if (state.screen === "month") root.innerHTML = renderMonth(kid);
+  else if (state.screen === "learn") root.innerHTML = renderLearn(kid);
+  else if (state.screen === "parent") root.innerHTML = renderParent(kid);
   else root.innerHTML = renderHome(kid);
   bind(kid);
+  if (state.keepScroll) {
+    window.scrollTo(0, y);
+    state.keepScroll = false;
+  } else if (state.scrollTop) {
+    window.scrollTo(0, 0);
+    state.scrollTop = false;
+  }
 }
 
-function openScreen(kid, screen) {
+function openScreen(kid, screen, panel) {
   if (screen === "spend" && state.screen !== "spend") {
     const saved = readPiggy(kid);
     const owed = readOwed(kid);
@@ -683,20 +1400,60 @@ function openScreen(kid, screen) {
     state.owedDraft = owed.amount > 0 ? owed.amount.toFixed(2) : "";
     state.owedError = "";
   }
+  if (screen === "save") {
+    const learn = readLearn(kid);
+    state.waitDraft = learn.waitingFor || "";
+    state.waitFlash = "";
+  }
+  if (screen === "learn") focusLesson(kid, "");
+  if (screen === "parent") {
+    state.parentEntry = "";
+    state.parentFirst = "";
+    state.parentError = "";
+    state.parentNoteFlash = "";
+    state.parentStep = readParentCode() ? "enter" : "set";
+    const progress = readLearn(kid);
+    const current = currentLesson(progress);
+    state.parentNote = current && progress.notes[current.id] ? progress.notes[current.id] : "";
+  }
   state.screen = screen;
-  state.panel = "why";
+  state.panel = panel || "why";
+  state.scrollTop = true;
+  render(kid);
+  if (screen === "parent" && state.parentStep !== "open") focusParent();
+}
+
+function captureDrafts() {
+  const ask = document.querySelector("[data-ask-input]");
+  if (ask) state.askDraft = ask.value;
+  const wait = document.querySelector("[data-wait-input]");
+  if (wait) state.waitDraft = wait.value;
+}
+
+function rerender(kid) {
+  state.keepScroll = true;
   render(kid);
 }
 
 function bind(kid) {
   document.querySelectorAll("[data-go]").forEach((el) => {
     el.addEventListener("click", () => {
-      openScreen(kid, el.getAttribute("data-go"));
+      openScreen(kid, el.getAttribute("data-go"), el.getAttribute("data-open-panel"));
     });
   });
   document.querySelectorAll("[data-back]").forEach((el) => {
     el.addEventListener("click", () => {
-      state.screen = el.getAttribute("data-back");
+      const dest = el.getAttribute("data-back");
+      if (dest !== "learn") state.justDoneId = "";
+      if (dest === "home") {
+        state.parentStep = "";
+        state.parentEntry = "";
+        state.parentFirst = "";
+        state.parentError = "";
+        state.parentNoteFlash = "";
+      }
+      state.screen = dest;
+      state.scrollTop = true;
       render(kid);
     });
   });
@@ -711,6 +1468,259 @@ function bind(kid) {
       state.monthFrom = el.getAttribute("data-go-month");
       state.screen = "month";
       render(kid);
+    });
+  });
+
+  document.querySelectorAll("[data-got-it]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      const progress = readLearn(kid);
+      const current = currentLesson(progress);
+      if (!current || progress.done.includes(current.id)) return;
+      const typed = state.askDraft.trim().slice(0, 120);
+      if (typed) progress.notes[current.id] = typed;
+      progress.done = progress.done.concat([current.id]);
+      const saved = writeLearn(kid, progress);
+      if (!saved) {
+        state.askFlash = "Couldn’t save that on this iPad. Try again.";
+        rerender(kid);
+        return;
+      }
+      state.justDoneId = current.id;
+      state.askOpen = false;
+      state.learnReview = "";
+      state.scrollTop = true;
+      render(kid);
+    });
+  });
+  document.querySelectorAll("[data-learn-continue]").forEach((el) => {
+    el.addEventListener("click", () => {
+      focusLesson(kid, "");
+      state.screen = "learn";
+      state.scrollTop = true;
+      render(kid);
+    });
+  });
+  document.querySelectorAll("[data-review]").forEach((el) => {
+    el.addEventListener("click", () => {
+      focusLesson(kid, el.getAttribute("data-review"));
+      state.screen = "learn";
+      state.scrollTop = true;
+      render(kid);
+    });
+  });
+  document.querySelectorAll("[data-review-current]").forEach((el) => {
+    el.addEventListener("click", () => {
+      focusLesson(kid, "");
+      state.screen = "learn";
+      state.scrollTop = true;
+      render(kid);
+    });
+  });
+  document.querySelectorAll("[data-sort]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const item = SORTS[state.sortIndex];
+      if (!item) return;
+      captureDrafts();
+      const choice = el.getAttribute("data-sort");
+      if (choice === item.answer) {
+        state.sortIndex += 1;
+        state.sortNote = "";
+      } else {
+        state.sortNote = "Try another jar. " + item.yes;
+      }
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-notice]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      const id = el.getAttribute("data-notice");
+      state.noticed[id] = !state.noticed[id];
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-month-example]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      state.monthPick = el.getAttribute("data-month-example");
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-path-example]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      state.pathPick = el.getAttribute("data-path-example");
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-privacy]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      state.privacyOn = !state.privacyOn;
+      rerender(kid);
+    });
+  });
+  document.querySelectorAll("[data-ask-toggle]").forEach((el) => {
+    el.addEventListener("click", () => {
+      captureDrafts();
+      state.askOpen = !state.askOpen;
+      state.askFlash = "";
+      rerender(kid);
+      if (state.askOpen) {
+        const input = document.querySelector("[data-ask-input]");
+        if (input) input.focus();
+      }
+    });
+  });
+  const askForm = document.querySelector("[data-ask-form]");
+  if (askForm) {
+    const askInput = askForm.querySelector("[data-ask-input]");
+    askInput.addEventListener("input", () => {
+      state.askDraft = askInput.value;
+    });
+    askForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const progress = readLearn(kid);
+      const view = viewLesson(progress);
+      const text = askInput.value.trim().slice(0, 120);
+      if (!text) {
+        state.askDraft = askInput.value;
+        state.askFlash = "Type a note, or skip this.";
+        rerender(kid);
+        const again = document.querySelector("[data-ask-input]");
+        if (again) again.focus();
+        return;
+      }
+      progress.notes[view.lesson.id] = text;
+      const saved = writeLearn(kid, progress);
+      state.askDraft = text;
+      state.askOpen = false;
+      state.askFlash = saved
+        ? "Saved for a grown-up on this iPad."
+        : "Couldn’t save that on this iPad. Try again.";
+      rerender(kid);
+    });
+  }
+  const clearAsk = document.querySelector("[data-ask-clear]");
+  if (clearAsk) {
+    clearAsk.addEventListener("click", () => {
+      const progress = readLearn(kid);
+      const view = viewLesson(progress);
+      delete progress.notes[view.lesson.id];
+      writeLearn(kid, progress);
+      state.askDraft = "";
+      state.askFlash = "";
+      rerender(kid);
+    });
+  }
+  const waitForm = document.querySelector("[data-wait-form]");
+  if (waitForm) {
+    const waitInput = waitForm.querySelector("[data-wait-input]");
+    waitInput.addEventListener("input", () => {
+      state.waitDraft = waitInput.value;
+      if (!state.waitFlash) return;
+      state.waitFlash = "";
+      const note = waitForm.querySelector(".sort-note");
+      if (note) note.remove();
+    });
+    waitForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const text = waitInput.value.trim().slice(0, 60);
+      state.waitDraft = waitInput.value;
+      if (!text) {
+        state.waitFlash = "Type one thing you’re waiting for.";
+        render(kid);
+        const again = document.querySelector("[data-wait-input]");
+        if (again) again.focus();
+        return;
+      }
+      const progress = readLearn(kid);
+      progress.waitingFor = text;
+      const saved = writeLearn(kid, progress);
+      state.waitDraft = text;
+      state.waitFlash = saved
+        ? "Remembered on this iPad."
+        : "Couldn’t save that on this iPad. Try again.";
+      render(kid);
+    });
+  }
+
+  const parentForm = document.querySelector("[data-parent-form]");
+  if (parentForm) {
+    const parentInput = parentForm.querySelector("[data-parent-input]");
+    parentInput.addEventListener("input", () => {
+      const digits = parentInput.value.replace(/\D/g, "").slice(0, 4);
+      parentInput.value = digits;
+      state.parentEntry = digits;
+      if (state.parentError) state.parentError = "";
+      if (digits.length === 4) submitParentCode(kid, digits);
+    });
+    parentForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitParentCode(kid, parentInput.value);
+    });
+  }
+  document.querySelectorAll("[data-parent-done]").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (state.parentStep !== "open") return;
+      const progress = readLearn(kid);
+      const current = currentLesson(progress);
+      if (!current) return;
+      const noteInput = document.querySelector("[data-parent-note]");
+      const typed = (noteInput ? noteInput.value : state.parentNote).trim().slice(0, 120);
+      if (typed) progress.notes[current.id] = typed;
+      progress.done = progress.done.concat([current.id]);
+      const saved = writeLearn(kid, progress);
+      if (!saved) {
+        state.parentNote = typed;
+        state.parentNoteFlash = "Couldn’t save that on this iPad. Try again.";
+        render(kid);
+        return;
+      }
+      const next = currentLesson(saved);
+      state.parentNote = next && saved.notes[next.id] ? saved.notes[next.id] : "";
+      state.parentNoteFlash = "Marked done.";
+      state.scrollTop = true;
+      render(kid);
+    });
+  });
+  const parentNoteForm = document.querySelector("[data-parent-note-form]");
+  if (parentNoteForm) {
+    const noteInput = parentNoteForm.querySelector("[data-parent-note]");
+    noteInput.addEventListener("input", () => {
+      state.parentNote = noteInput.value;
+    });
+    parentNoteForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (state.parentStep !== "open") return;
+      const progress = readLearn(kid);
+      const current = currentLesson(progress);
+      if (!current) return;
+      const text = noteInput.value.trim().slice(0, 120);
+      if (!text) {
+        state.parentNoteFlash = "Type a note, or skip it.";
+        render(kid);
+        return;
+      }
+      progress.notes[current.id] = text;
+      const saved = writeLearn(kid, progress);
+      state.parentNote = text;
+      state.parentNoteFlash = saved
+        ? "Note saved on this iPad."
+        : "Couldn’t save that on this iPad. Try again.";
+      render(kid);
+    });
+  }
+  document.querySelectorAll("[data-parent-reset]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.parentStep = "set";
+      state.parentFirst = "";
+      state.parentEntry = "";
+      state.parentError = "";
+      state.parentNoteFlash = "";
+      render(kid);
+      focusParent();
     });
   });
 
